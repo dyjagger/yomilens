@@ -12,6 +12,7 @@ The app should be tested with horizontal, high-contrast Japanese before adding h
 | OCR inserts spaces between Japanese glyphs | The phrase is rejoined before tokenization | OCR cleanup unit test | Required |
 | Tap text, then scan | Focus feedback appears and only the bright guide is processed | Virtual-camera capture test and crop/rotation test | Required |
 | Point at no Japanese | A clear “No Japanese text was found” error appears | State path implemented | Required |
+| Update an installed copy | v0.1.1 updates in place to v0.1.2 with the same signing identity | Hosted emulator upgrade test | Required |
 
 ## Current run
 
