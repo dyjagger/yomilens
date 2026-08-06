@@ -8,7 +8,9 @@ YomiLens is a native Android prototype that reads Japanese text from the camera 
 
 ## Download
 
-[Download YomiLens for Android](https://github.com/dyjagger/yomilens/releases/latest/download/YomiLens-v0.1.0.apk)
+[Download YomiLens for ARM64 Android phones](https://github.com/dyjagger/yomilens/releases/latest/download/YomiLens-arm64.apk)
+
+This smaller build is the correct one for the Huawei P30 Pro and most modern Android phones. A larger [universal APK](https://github.com/dyjagger/yomilens/releases/latest/download/YomiLens-universal.apk) is also available for other CPU types.
 
 Android may ask you to allow installation from your browser or file manager because this prototype is distributed directly rather than through Google Play.
 
@@ -32,7 +34,7 @@ The project requires Android SDK 36 and Java 17 or newer.
 
 Use `./gradlew connectedDebugAndroidTest --no-parallel` to run the Compose selector test on a stable emulator or connected phone. The instrumented test compiles in this prototype workspace; the local headless emulator crashed during cold boot, so a successful device run is still an explicit acceptance item.
 
-Install the debug APK from `app/build/outputs/apk/debug/app-debug.apk` on an Android 6.0 (API 23) or newer phone.
+Install `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` on an ARM64 phone, or use `app-universal-debug.apk` on an Android 6.0 (API 23) or newer phone with an unknown CPU type.
 
 ## Accuracy limits
 
