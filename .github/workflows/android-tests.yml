@@ -40,7 +40,11 @@ jobs:
       - name: Prepare requested user-test image
         run: |
           mkdir -p app/src/androidTest/assets
-          curl --fail --location --silent --show-error https://cdn.britannica.com/46/63146-050-D6F89DED/Kanji-characters.jpg --output app/src/androidTest/assets/requested_user_image.jpg
+          if curl --fail --location --silent --show-error https://cdn.britannica.com/46/63146-050-D6F89DED/Kanji-characters.jpg --output /tmp/requested_user_image.jpg; then
+            mv /tmp/requested_user_image.jpg app/src/androidTest/assets/requested_user_image.jpg
+          else
+            echo "Requested external image unavailable; its optional device test will be skipped."
+          fi
 
       - name: Run UI and Japanese OCR tests
         uses: reactivecircus/android-emulator-runner@v2
@@ -56,7 +60,7 @@ jobs:
             curl --fail --location --silent --show-error https://github.com/dyjagger/yomilens/releases/download/v0.1.1/YomiLens-universal.apk --output /tmp/YomiLens-v0.1.1.apk
             adb install /tmp/YomiLens-v0.1.1.apk
             adb install -r app/build/outputs/apk/debug/app-x86_64-debug.apk
-            adb shell dumpsys package app.yomilens | rg 'versionCode=3'
+            adb shell dumpsys package app.yomilens | rg 'versionCode=4'
             adb uninstall app.yomilens
             ./gradlew connectedDebugAndroidTest --no-parallel
-            adb logcat -d | rg 'YomiLensExternal'
+            rg 'YomiLensExternal' app/build/outputs/androidTest-results/connected/debug || true

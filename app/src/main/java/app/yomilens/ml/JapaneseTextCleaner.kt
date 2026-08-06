@@ -30,7 +30,6 @@ object JapaneseTextCleaner {
                 if (
                     previous != null &&
                     next != null &&
-                    !(isJapaneseCharacter(previous) && isJapaneseCharacter(next)) &&
                     lastOrNull() != ' '
                 ) {
                     append(' ')

@@ -22,7 +22,28 @@ class JapaneseOcrEngine(
         JapaneseTextRecognizerOptions.Builder().build(),
     ),
     private val textRecognition: (InputImage) -> Task<String> = { input ->
-        recognizer.process(input).continueWith { result -> result.result.text }
+        recognizer.process(input).continueWith { task ->
+            val lines = task.result.textBlocks.flatMap { block ->
+                block.lines.map { line ->
+                    line.elements.map { element ->
+                        OcrSegment(
+                            text = element.text,
+                            left = element.boundingBox?.left,
+                            right = element.boundingBox?.right,
+                        )
+                    }.ifEmpty {
+                        listOf(
+                            OcrSegment(
+                                text = line.text,
+                                left = line.boundingBox?.left,
+                                right = line.boundingBox?.right,
+                            ),
+                        )
+                    }
+                }
+            }
+            OcrLayoutReconstructor.reconstruct(lines)
+        }
     },
 ) : AutoCloseable {
     fun recognize(imageProxy: ImageProxy): Task<String> {

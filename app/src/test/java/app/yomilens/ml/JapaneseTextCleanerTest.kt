@@ -12,10 +12,17 @@ class JapaneseTextCleanerTest {
     }
 
     @Test
-    fun rejoinsJapaneseGlyphsSplitByOcrSpacing() {
+    fun preservesSpacingReportedByOcr() {
         val result = JapaneseTextCleaner.clean("日 本 語 を 勉 強 し ま す")
 
-        assertEquals("日本語を勉強します", result)
+        assertEquals("日 本 語 を 勉 強 し ま す", result)
+    }
+
+    @Test
+    fun preservesMeaningfulSpacingBetweenChartCharacters() {
+        val result = JapaneseTextCleaner.clean("橋 花 月\n友 目 色")
+
+        assertEquals("橋 花 月\n友 目 色", result)
     }
 
     @Test

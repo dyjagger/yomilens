@@ -54,4 +54,19 @@ class JapaneseReadingEngineTest {
             )
         }
     }
+
+    @Test
+    fun readsSeparatedCharactersFromTheRequestedChartIndividually() {
+        val readings = engine.annotate("橋 花 月\n友 目 色")
+            .flatMap { it.tokens }
+            .filter { KanaScripts.containsKanji(it.surface) }
+            .associate { it.surface to it.furigana }
+
+        assertEquals("はし", readings["橋"])
+        assertEquals("はな", readings["花"])
+        assertEquals("つき", readings["月"])
+        assertEquals("とも", readings["友"])
+        assertEquals("め", readings["目"])
+        assertEquals("いろ", readings["色"])
+    }
 }

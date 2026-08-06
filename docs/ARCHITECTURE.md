@@ -6,7 +6,7 @@ CameraX binds one preview and one in-memory `ImageCapture` use case to the activ
 
 `JapaneseOcrEngine` converts the captured frame in memory, applies its CameraX viewport crop, rotates it upright, and then crops again to the visible scan guide before giving it to ML Kit. The `ImageProxy` is closed before recognition starts and the temporary bitmap is recycled when recognition completes; no image is written to storage.
 
-ML Kit Text Recognition v2 uses its bundled Japanese script model so OCR is ready without a model download. OCR cleanup discards lines without Japanese, rejoins Japanese glyphs separated by recognition whitespace, and preserves useful line boundaries for downstream display.
+ML Kit Text Recognition v2 uses its bundled Japanese script model so OCR is ready without a model download. The OCR layer uses element bounds to join close-set Japanese text while keeping widely separated chart entries apart. Cleanup then discards lines without Japanese and preserves useful line boundaries for downstream display.
 
 ## Readings
 

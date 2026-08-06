@@ -24,7 +24,7 @@ class JapaneseOcrEngineFrameTest {
             textRecognition = { input ->
                 inputWidth = input.width
                 inputHeight = input.height
-                Tasks.forResult("SALE\n日 本 語")
+                Tasks.forResult("SALE\n日本語")
             },
         )
 
