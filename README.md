@@ -40,7 +40,7 @@ The project requires Android SDK 36 and Java 17 or newer.
 ./gradlew assembleDebug
 ```
 
-Use `./gradlew connectedDebugAndroidTest --no-parallel` to run the Compose selector test on a stable emulator or connected phone. The instrumented test compiles in this prototype workspace; the local headless emulator crashed during cold boot, so a successful device run is still an explicit acceptance item.
+Use `./gradlew connectedDebugAndroidTest --no-parallel` to run the camera, OCR, and Compose tests on a stable emulator or connected phone. The hosted Android 15 emulator suite passes; a physical-device pass is still required for device-specific camera behavior.
 
 The connected suite also renders all three outputs from one scan and asks the bundled Japanese OCR model to read a high-contrast generated sample. See `docs/USER_TESTS.md` for the acceptance matrix.
 

@@ -20,4 +20,5 @@ The app should be tested with horizontal, high-contrast Japanese before adding h
 - The app and Android test APKs compile.
 - The UI journey test covers switching among all three outputs from one recognized phrase.
 - The connected suite includes a virtual-camera capture cycle, a crop/rotation/resource-lifecycle test, and a bundled-model OCR smoke test.
+- The complete suite passed on a hosted Android 15 emulator: [workflow run 31127453050](https://github.com/dyjagger/yomilens/actions/runs/31127453050).
 - A Huawei P30 Pro hardware pass remains necessary because this workspace has no attached Android device and its local headless emulator is unstable.
