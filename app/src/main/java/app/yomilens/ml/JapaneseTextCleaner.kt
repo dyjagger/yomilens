@@ -23,7 +23,9 @@ object JapaneseTextCleaner {
 
                 val previous = lastOrNull()
                 var nextIndex = index + 1
+                var hasWideGap = character == OCR_WIDE_GAP
                 while (nextIndex < trimmed.length && trimmed[nextIndex].isWhitespace()) {
+                    hasWideGap = hasWideGap || trimmed[nextIndex] == OCR_WIDE_GAP
                     nextIndex += 1
                 }
                 val next = trimmed.getOrNull(nextIndex)
@@ -32,7 +34,7 @@ object JapaneseTextCleaner {
                     next != null &&
                     lastOrNull() != ' '
                 ) {
-                    append(' ')
+                    append(if (hasWideGap) OCR_WIDE_GAP else ' ')
                 }
                 index = nextIndex
             }

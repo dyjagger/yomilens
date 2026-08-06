@@ -16,7 +16,7 @@ This is morphological analysis, not contextual language understanding. Names, sp
 
 ## English
 
-`MlKitEnglishTranslator` downloads the Japanese-to-English model when English is first requested and runs translation on-device afterward. The translator and recognizer are closed with the ViewModel lifecycle. A new scan cancels any stale translation result, and generation checks prevent an older result from replacing newer text.
+`MlKitEnglishTranslator` downloads the Japanese-to-English model when English is first requested and runs translation on-device afterward. Normal prose is translated as one unit to preserve sentence context. OCR output that has the short rows or wide spacing of a chart is translated entry by entry and reassembled in the detected layout. The Furigana reading resolves standalone labels whose kanji meaning is ambiguous, such as `月[つき]` (“moon”) versus `月[げつ]` (“month”). The translator and recognizer are closed with the ViewModel lifecycle. A new scan cancels any stale translation result, and generation checks prevent an older result from replacing newer text.
 
 ## UI and state
 

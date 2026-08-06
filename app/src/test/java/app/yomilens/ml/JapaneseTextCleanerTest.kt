@@ -20,9 +20,9 @@ class JapaneseTextCleanerTest {
 
     @Test
     fun preservesMeaningfulSpacingBetweenChartCharacters() {
-        val result = JapaneseTextCleaner.clean("橋 花 月\n友 目 色")
+        val result = JapaneseTextCleaner.clean("橋　花　月\n友　目　色")
 
-        assertEquals("橋 花 月\n友 目 色", result)
+        assertEquals("橋　花　月\n友　目　色", result)
     }
 
     @Test

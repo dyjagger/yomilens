@@ -2,6 +2,8 @@ package app.yomilens.ml
 
 import kotlin.math.max
 
+const val OCR_WIDE_GAP: Char = '\u3000'
+
 /** A piece of OCR text and its horizontal bounds within one detected line. */
 data class OcrSegment(
     val text: String,
@@ -26,7 +28,7 @@ object OcrLayoutReconstructor {
 
         usableSegments.forEachIndexed { index, segment ->
             if (index > 0 && isVisuallySeparate(usableSegments[index - 1], segment)) {
-                append(' ')
+                append(OCR_WIDE_GAP)
             }
             append(segment.text)
         }

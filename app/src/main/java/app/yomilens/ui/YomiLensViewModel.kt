@@ -77,7 +77,7 @@ class YomiLensViewModel(
         )
 
         if (mode == OutputMode.ENGLISH && current.recognizedJapanese.isNotBlank() && current.english == null) {
-            requestEnglish(scanGeneration, current.recognizedJapanese)
+            requestEnglish(scanGeneration, current.recognizedJapanese, current.readingLines)
         }
     }
 
@@ -138,7 +138,7 @@ class YomiLensViewModel(
                 )
 
                 if (mutableState.value.selectedMode == OutputMode.ENGLISH) {
-                    requestEnglish(generation, japanese)
+                    requestEnglish(generation, japanese, lines)
                 }
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -163,11 +163,15 @@ class YomiLensViewModel(
     fun retryEnglish() {
         val current = mutableState.value
         if (current.recognizedJapanese.isNotBlank()) {
-            requestEnglish(scanGeneration, current.recognizedJapanese)
+            requestEnglish(scanGeneration, current.recognizedJapanese, current.readingLines)
         }
     }
 
-    private fun requestEnglish(generation: Int, japanese: String) {
+    private fun requestEnglish(
+        generation: Int,
+        japanese: String,
+        readings: List<ReadingLine>,
+    ) {
         translationJob?.cancel()
         mutableState.value = mutableState.value.copy(
             phase = ScanPhase.PREPARING_ENGLISH,
@@ -175,7 +179,7 @@ class YomiLensViewModel(
         )
         translationJob = viewModelScope.launch {
             try {
-                val english = translator.translate(japanese)
+                val english = translator.translate(japanese, readings)
                 if (generation != scanGeneration) return@launch
                 mutableState.value = mutableState.value.copy(
                     english = english,

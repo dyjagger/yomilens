@@ -30,7 +30,7 @@ class OcrLayoutReconstructorTest {
             ),
         )
 
-        assertEquals("橋 花 月\n友 目 色", detected)
+        assertEquals("橋　花　月\n友　目　色", detected)
         val readings = JapaneseReadingEngine().annotate(detected)
             .flatMap { it.tokens }
             .associate { it.surface to it.furigana }

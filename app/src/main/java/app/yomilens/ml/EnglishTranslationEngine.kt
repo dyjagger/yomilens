@@ -1,5 +1,6 @@
 package app.yomilens.ml
 
+import app.yomilens.model.ReadingLine
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
@@ -15,10 +16,19 @@ class EnglishTranslationEngine(
             .build(),
     ),
 ) : AutoCloseable {
-    suspend fun translate(japanese: String): String {
-        val downloadConditions = DownloadConditions.Builder().build()
-        translator.downloadModelIfNeeded(downloadConditions).await()
-        return translator.translate(japanese).await().trim()
+    suspend fun translate(
+        japanese: String,
+        readings: List<ReadingLine> = emptyList(),
+    ): String {
+        val plan = EnglishTranslationPlanner.create(japanese, readings)
+        if (plan.entries.any { entry -> entry.fixedEnglish == null }) {
+            val downloadConditions = DownloadConditions.Builder().build()
+            translator.downloadModelIfNeeded(downloadConditions).await()
+        }
+        val translations = plan.entries.map { entry ->
+            entry.fixedEnglish ?: translator.translate(entry.japanese).await().trim()
+        }
+        return plan.render(translations)
     }
 
     override fun close() {

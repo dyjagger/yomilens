@@ -17,7 +17,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class ExternalImageFuriganaTest {
     @Test
-    fun reportsFuriganaForRequestedUserImage(): Unit = runBlocking {
+    fun reportsFuriganaAndEnglishForRequestedUserImage(): Unit = runBlocking {
         val testAssets = InstrumentationRegistry.getInstrumentation().context.assets
         assumeTrue(testAssets.list("")?.contains(TEST_IMAGE) == true)
         val bitmap = testAssets.open(TEST_IMAGE).use(BitmapFactory::decodeStream)
@@ -57,6 +57,18 @@ class ExternalImageFuriganaTest {
 
             Log.i(LOG_TAG, "DETECTED=${detected.replace('\n', '|')}")
             Log.i(LOG_TAG, "FURIGANA=$furigana")
+
+            val translationEngine = EnglishTranslationEngine()
+            try {
+                val english = translationEngine.translate(detected, annotated)
+                assertEquals(
+                    listOf("friend", "moon", "eye", "color"),
+                    english.split(Regex("\\s+")).map(String::lowercase),
+                )
+                Log.i(LOG_TAG, "ENGLISH=${english.replace('\n', '|')}")
+            } finally {
+                translationEngine.close()
+            }
         } finally {
             ocrEngine.close()
         }
