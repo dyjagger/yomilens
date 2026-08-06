@@ -37,6 +37,11 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      - name: Prepare requested user-test image
+        run: |
+          mkdir -p app/src/androidTest/assets
+          curl --fail --location --silent --show-error https://cdn.britannica.com/46/63146-050-D6F89DED/Kanji-characters.jpg --output app/src/androidTest/assets/requested_user_image.jpg
+
       - name: Run UI and Japanese OCR tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -54,3 +59,4 @@ jobs:
             adb shell dumpsys package app.yomilens | rg 'versionCode=3'
             adb uninstall app.yomilens
             ./gradlew connectedDebugAndroidTest --no-parallel
+            adb logcat -d | rg 'YomiLensExternal'
