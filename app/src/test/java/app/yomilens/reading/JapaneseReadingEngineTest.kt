@@ -33,4 +33,25 @@ class JapaneseReadingEngineTest {
         assertEquals(2, lines.size)
         assertEquals("nihongo\neigo", engine.romanize(lines))
     }
+
+    @Test
+    fun commonScanSentencesGiveReadingsForEveryKanjiToken() {
+        val sentences = listOf(
+            "私は日本語を勉強しています。",
+            "明日は東京駅へ行きます。",
+            "カメラで本を読みます。",
+        )
+
+        sentences.forEach { sentence ->
+            val kanjiTokens = engine.annotate(sentence)
+                .flatMap { it.tokens }
+                .filter { KanaScripts.containsKanji(it.surface) }
+
+            assertTrue("Expected kanji tokens in: $sentence", kanjiTokens.isNotEmpty())
+            assertTrue(
+                "Every common kanji token should have furigana in: $sentence",
+                kanjiTokens.all { !it.furigana.isNullOrBlank() },
+            )
+        }
+    }
 }

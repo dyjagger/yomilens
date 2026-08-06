@@ -14,6 +14,14 @@ This smaller build is the correct one for the Huawei P30 Pro and most modern And
 
 Android may ask you to allow installation from your browser or file manager because this prototype is distributed directly rather than through Google Play.
 
+## Scanning
+
+1. Put one or two horizontal lines of clearly printed Japanese inside the bright camera box.
+2. Tap the text to focus, choose Furigana, Romaji, or English, and tap **Scan Japanese**.
+3. Check **Detected Japanese** above the result. All three output choices are derived from that exact detected text.
+
+Only the bright guide box is scanned. English-only background lines are discarded. Furigana appears as the smaller hiragana text above tokens containing kanji.
+
 ## Privacy-first behavior
 
 - Camera frames are captured into memory for OCR and are never saved by the app.
@@ -33,6 +41,8 @@ The project requires Android SDK 36 and Java 17 or newer.
 ```
 
 Use `./gradlew connectedDebugAndroidTest --no-parallel` to run the Compose selector test on a stable emulator or connected phone. The instrumented test compiles in this prototype workspace; the local headless emulator crashed during cold boot, so a successful device run is still an explicit acceptance item.
+
+The connected suite also renders all three outputs from one scan and asks the bundled Japanese OCR model to read a high-contrast generated sample. See `docs/USER_TESTS.md` for the acceptance matrix.
 
 Install `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` on an ARM64 phone, or use `app-universal-debug.apk` on an Android 6.0 (API 23) or newer phone with an unknown CPU type.
 

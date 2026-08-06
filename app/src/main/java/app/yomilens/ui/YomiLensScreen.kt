@@ -4,11 +4,14 @@ package app.yomilens.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.compose.foundation.background
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Arrangement
@@ -52,6 +55,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -75,35 +79,61 @@ fun YomiLensRoute(viewModel: YomiLensViewModel) {
     val imageCapture = remember {
         ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setResolutionSelector(
+                ResolutionSelector.Builder()
+                    .setResolutionStrategy(
+                        ResolutionStrategy(
+                            Size(1920, 1080),
+                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER,
+                        ),
+                    )
+                    .build(),
+            )
             .build()
     }
     val mainExecutor = remember(context) { ContextCompat.getMainExecutor(context) }
+    var cameraController by remember { mutableStateOf<CameraScanController?>(null) }
 
     YomiLensScreen(
         state = state,
         hasCameraPermission = hasCameraPermission,
+        isCameraReady = cameraController != null,
         imageCapture = imageCapture,
         onRequestCamera = { permissionLauncher.launch(Manifest.permission.CAMERA) },
         onModeSelected = viewModel::selectMode,
         onScan = {
+            val controller = cameraController
+            if (controller == null) {
+                viewModel.onCaptureFailed("The camera is still starting. Please wait a moment and try again.")
+                return@YomiLensScreen
+            }
             viewModel.beginCapture()
-            imageCapture.takePicture(
-                mainExecutor,
-                object : ImageCapture.OnImageCapturedCallback() {
-                    override fun onCaptureSuccess(image: ImageProxy) {
-                        viewModel.onImageCaptured(image)
-                    }
+            controller.focusGuide {
+                try {
+                    imageCapture.takePicture(
+                        mainExecutor,
+                        object : ImageCapture.OnImageCapturedCallback() {
+                            override fun onCaptureSuccess(image: ImageProxy) {
+                                viewModel.onImageCaptured(image)
+                            }
 
-                    override fun onError(exception: ImageCaptureException) {
-                        viewModel.onCaptureFailed(
-                            exception.message ?: "The photo could not be captured. Please try again.",
-                        )
-                    }
-                },
-            )
+                            override fun onError(exception: ImageCaptureException) {
+                                viewModel.onCaptureFailed(
+                                    exception.message ?: "The photo could not be captured. Please try again.",
+                                )
+                            }
+                        },
+                    )
+                } catch (error: Exception) {
+                    viewModel.onCaptureFailed(
+                        error.message ?: "The photo could not be captured. Please try again.",
+                    )
+                }
+            }
         },
         onRetryEnglish = viewModel::retryEnglish,
         onCameraError = viewModel::onCaptureFailed,
+        onCameraReady = { cameraController = it },
     )
 }
 
@@ -111,12 +141,14 @@ fun YomiLensRoute(viewModel: YomiLensViewModel) {
 fun YomiLensScreen(
     state: YomiLensUiState,
     hasCameraPermission: Boolean,
+    isCameraReady: Boolean,
     imageCapture: ImageCapture,
     onRequestCamera: () -> Unit,
     onModeSelected: (OutputMode) -> Unit,
     onScan: () -> Unit,
     onRetryEnglish: () -> Unit,
     onCameraError: (String) -> Unit,
+    onCameraReady: (CameraScanController?) -> Unit,
 ) {
     Scaffold { safePadding ->
         Column(
@@ -136,11 +168,21 @@ fun YomiLensScreen(
                 tonalElevation = 3.dp,
             ) {
                 if (hasCameraPermission) {
-                    CameraViewport(
-                        imageCapture = imageCapture,
-                        onCameraError = onCameraError,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    Box {
+                        CameraViewport(
+                            imageCapture = imageCapture,
+                            onCameraError = onCameraError,
+                            onCameraReady = onCameraReady,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        CameraStatusBadge(
+                            phase = state.phase,
+                            isCameraReady = isCameraReady,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(10.dp),
+                        )
+                    }
                 } else {
                     CameraPermissionPanel(onRequestCamera)
                 }
@@ -179,7 +221,7 @@ fun YomiLensScreen(
                     )
                     Button(
                         onClick = onScan,
-                        enabled = hasCameraPermission && !state.isBusy,
+                        enabled = hasCameraPermission && isCameraReady && !state.isBusy,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(52.dp)
@@ -198,6 +240,32 @@ fun YomiLensScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CameraStatusBadge(
+    phase: ScanPhase,
+    isCameraReady: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val message = when {
+        !isCameraReady -> "Starting camera…"
+        phase == ScanPhase.CAPTURING -> "Focusing and capturing…"
+        phase == ScanPhase.RECOGNIZING -> "Scanning only the highlighted box…"
+        else -> "Center Japanese in the box • tap to focus"
+    }
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -317,16 +385,48 @@ private fun ResultPanel(
                 )
             }
 
-            state.selectedMode == OutputMode.FURIGANA -> {
-                FuriganaOutput(state.readingLines)
-            }
-
-            state.selectedMode == OutputMode.ROMAJI -> {
-                PlainOutput(state.romaji)
-            }
-
             else -> {
-                EnglishOutput(state.english.orEmpty())
+                ScanResultContent(state)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScanResultContent(state: YomiLensUiState) {
+    Column(Modifier.fillMaxSize()) {
+        Text(
+            text = "Detected Japanese",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        SelectionContainer {
+            Text(
+                text = state.recognizedJapanese,
+                modifier = Modifier.testTag("detected_text"),
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        HorizontalDivider()
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = when (state.selectedMode) {
+                OutputMode.FURIGANA -> "Furigana • small reading above kanji"
+                OutputMode.ROMAJI -> "Romaji"
+                OutputMode.ENGLISH -> "English"
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(5.dp))
+        Box(Modifier.weight(1f)) {
+            when (state.selectedMode) {
+                OutputMode.FURIGANA -> FuriganaOutput(state.readingLines)
+                OutputMode.ROMAJI -> PlainOutput(state.romaji)
+                OutputMode.ENGLISH -> EnglishOutput(state.english.orEmpty())
             }
         }
     }
@@ -382,9 +482,10 @@ private fun FuriganaOutput(lines: List<ReadingLine>) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = token.furigana ?: " ",
-                                fontSize = 11.sp,
-                                lineHeight = 12.sp,
-                                color = MaterialTheme.colorScheme.secondary,
+                                fontSize = 14.sp,
+                                lineHeight = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary,
                             )
                             Text(
                                 text = token.surface,
