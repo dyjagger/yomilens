@@ -48,9 +48,7 @@ jobs:
           disable-animations: true
           script: |
             ./gradlew assembleDebug --no-parallel
-            curl --fail --location --silent --show-error \
-              https://github.com/dyjagger/yomilens/releases/download/v0.1.1/YomiLens-universal.apk \
-              --output /tmp/YomiLens-v0.1.1.apk
+            curl --fail --location --silent --show-error https://github.com/dyjagger/yomilens/releases/download/v0.1.1/YomiLens-universal.apk --output /tmp/YomiLens-v0.1.1.apk
             adb install /tmp/YomiLens-v0.1.1.apk
             adb install -r app/build/outputs/apk/debug/app-x86_64-debug.apk
             adb shell dumpsys package app.yomilens | rg 'versionCode=3'
