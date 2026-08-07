@@ -14,6 +14,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      YOMILENS_KEYSTORE_PATH: ${{ runner.temp }}/yomilens-debug.keystore
 
     steps:
       - name: Check out source
@@ -30,9 +32,9 @@ jobs:
           PROTOTYPE_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
         run: |
           test -n "$PROTOTYPE_KEYSTORE_BASE64"
-          mkdir -p "$HOME/.android"
-          printf '%s' "$PROTOTYPE_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"
-          chmod 600 "$HOME/.android/debug.keystore"
+          printf '%s' "$PROTOTYPE_KEYSTORE_BASE64" | base64 --decode > "$YOMILENS_KEYSTORE_PATH"
+          chmod 600 "$YOMILENS_KEYSTORE_PATH"
+          keytool -list -v -keystore "$YOMILENS_KEYSTORE_PATH" -storepass android -alias androiddebugkey | grep -q '75:FF:40:3E:7D:05:20:C6:87:C7:22:57:0F:01:6F:87:1F:93:8A:8D:F3:1D:65:6B:C3:36:B6:B4:2A:D8:AA:D7'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6

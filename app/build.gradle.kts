@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+val configuredDebugKeystore = providers.environmentVariable("YOMILENS_KEYSTORE_PATH").orNull
+
 android {
     namespace = "app.yomilens"
     compileSdk = 36
@@ -23,6 +25,15 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+        }
+    }
+
+    if (configuredDebugKeystore != null) {
+        signingConfigs.getByName("debug") {
+            storeFile = file(configuredDebugKeystore)
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
         }
     }
 
