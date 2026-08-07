@@ -42,6 +42,7 @@ data class YomiLensUiState(
     val overlayItems: List<LensOverlayItem> = emptyList(),
     val frozenFrame: RetainedCameraFrame? = null,
     val errorMessage: String? = null,
+    val completedScanCount: Int = 0,
 ) {
     val isBusy: Boolean
         get() = phase in setOf(
@@ -62,6 +63,7 @@ class YomiLensViewModel(
 
     private var scanGeneration = 0
     private var translationJob: Job? = null
+    private val captureAdmission = CaptureAdmissionGate()
 
     fun selectMode(mode: OutputMode) {
         val current = mutableState.value
@@ -88,21 +90,16 @@ class YomiLensViewModel(
         }
     }
 
-    fun beginCapture() {
+    fun tryBeginCapture(isCameraStreaming: Boolean): Boolean {
+        val current = mutableState.value
+        if (!captureAdmission.tryAcquire(current.isBusy, isCameraStreaming)) return false
         scanGeneration += 1
         translationJob?.cancel()
-        val previousFrame = mutableState.value.frozenFrame
-        mutableState.value = mutableState.value.copy(
+        mutableState.value = current.copy(
             phase = ScanPhase.CAPTURING,
             errorMessage = null,
-            recognizedJapanese = "",
-            readingLines = emptyList(),
-            romaji = "",
-            english = null,
-            overlayItems = emptyList(),
-            frozenFrame = null,
         )
-        previousFrame?.release()
+        return true
     }
 
     fun onImageCaptured(imageProxy: ImageProxy) {
@@ -111,6 +108,7 @@ class YomiLensViewModel(
         val recognitionTask = try {
             ocrEngine.recognize(imageProxy)
         } catch (error: Exception) {
+            captureAdmission.complete()
             mutableState.value = mutableState.value.copy(
                 phase = ScanPhase.ERROR,
                 errorMessage = error.message ?: "Japanese text recognition failed. Please try again.",
@@ -126,16 +124,27 @@ class YomiLensViewModel(
                 if (generation != scanGeneration) {
                     recognition.frozenFrame.recycleSafely()
                     pendingFrame = null
+                    captureAdmission.complete()
                     return@launch
                 }
                 val japanese = recognition.text
                 if (japanese.isBlank()) {
                     recognition.frozenFrame.recycleSafely()
                     pendingFrame = null
+                    val previousFrame = mutableState.value.frozenFrame
                     mutableState.value = mutableState.value.copy(
-                        phase = ScanPhase.ERROR,
-                        errorMessage = "No Japanese text was found. Move closer, hold steady, and try again.",
+                        phase = ScanPhase.READY,
+                        recognizedJapanese = "",
+                        readingLines = emptyList(),
+                        romaji = "",
+                        english = null,
+                        overlayItems = emptyList(),
+                        frozenFrame = null,
+                        errorMessage = null,
+                        completedScanCount = mutableState.value.completedScanCount + 1,
                     )
+                    captureAdmission.complete()
+                    previousFrame?.release()
                     return@launch
                 }
 
@@ -143,7 +152,7 @@ class YomiLensViewModel(
                     readingEngine.annotate(japanese)
                 }
                 val romaji = withContext(processingDispatcher) {
-                    readingEngine.romanize(lines)
+                    readingEngine.romanizeKanji(lines)
                 }
                 val overlays = withContext(processingDispatcher) {
                     recognition.regions.map { region ->
@@ -152,16 +161,19 @@ class YomiLensViewModel(
                             japanese = region.text,
                             bounds = region.bounds,
                             readingLines = regionReadings,
-                            romaji = readingEngine.romanize(regionReadings),
+                            romaji = readingEngine.romanizeKanji(regionReadings),
+                            orientation = region.orientation,
                         )
                     }
                 }
                 if (generation != scanGeneration) {
                     recognition.frozenFrame.recycleSafely()
                     pendingFrame = null
+                    captureAdmission.complete()
                     return@launch
                 }
 
+                val previousFrame = mutableState.value.frozenFrame
                 mutableState.value = mutableState.value.copy(
                     recognizedJapanese = japanese,
                     readingLines = lines,
@@ -175,7 +187,10 @@ class YomiLensViewModel(
                         ScanPhase.READY
                     },
                     errorMessage = null,
+                    completedScanCount = mutableState.value.completedScanCount + 1,
                 )
+                captureAdmission.complete()
+                previousFrame?.release()
                 pendingFrame = null
 
                 if (mutableState.value.selectedMode == OutputMode.ENGLISH) {
@@ -186,6 +201,7 @@ class YomiLensViewModel(
                 throw cancellation
             } catch (error: Exception) {
                 pendingFrame.recycleSafely()
+                captureAdmission.complete()
                 if (generation == scanGeneration) {
                     mutableState.value = mutableState.value.copy(
                         phase = ScanPhase.ERROR,
@@ -197,6 +213,7 @@ class YomiLensViewModel(
     }
 
     fun onCaptureFailed(message: String) {
+        captureAdmission.complete()
         mutableState.value = mutableState.value.copy(
             phase = ScanPhase.ERROR,
             errorMessage = message,
@@ -223,7 +240,7 @@ class YomiLensViewModel(
             try {
                 val translations = translator.translateUnits(
                     overlays.map { overlay ->
-                        JapaneseTranslationUnit(overlay.japanese, overlay.readingLines)
+                        JapaneseTranslationUnit(overlay.kanjiText, overlay.kanjiReadingLines)
                     },
                 )
                 if (generation != scanGeneration) return@launch

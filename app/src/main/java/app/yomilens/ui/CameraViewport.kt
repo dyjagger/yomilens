@@ -34,6 +34,14 @@ class CameraScanController internal constructor(
     private val previewView: PreviewView,
     private val mainExecutor: Executor,
 ) {
+    private val streaming = AtomicBoolean(false)
+
+    internal fun setStreaming(isStreaming: Boolean) {
+        streaming.set(isStreaming)
+    }
+
+    internal fun isStreaming(): Boolean = streaming.get()
+
     fun focusCenter(onFocused: () -> Unit) {
         val delivered = AtomicBoolean(false)
         val finish = {
@@ -98,9 +106,9 @@ fun CameraViewport(
         var boundController: CameraScanController? = null
         var hasBoundCamera = false
         val streamObserver = Observer<PreviewView.StreamState> { streamState ->
-            currentOnCameraReady.value(
-                boundController.takeIf { streamState == PreviewView.StreamState.STREAMING },
-            )
+            val isStreaming = streamState == PreviewView.StreamState.STREAMING
+            boundController?.setStreaming(isStreaming)
+            currentOnCameraReady.value(boundController.takeIf { isStreaming })
         }
         previewView.previewStreamState.observe(lifecycleOwner, streamObserver)
 
@@ -140,6 +148,7 @@ fun CameraViewport(
                 }
                 hasBoundCamera = true
                 if (previewView.previewStreamState.value == PreviewView.StreamState.STREAMING) {
+                    scanController.setStreaming(true)
                     currentOnCameraReady.value(scanController)
                 }
             } catch (_: Exception) {
@@ -169,6 +178,7 @@ fun CameraViewport(
             disposed.set(true)
             previewView.previewStreamState.removeObserver(streamObserver)
             previewView.setOnTouchListener(null)
+            boundController?.setStreaming(false)
             boundController = null
             cameraProvider?.unbindAll()
             currentOnCameraReady.value(null)
@@ -177,7 +187,7 @@ fun CameraViewport(
 
     Box(
         modifier = modifier.semantics {
-            contentDescription = "Full-screen live camera preview. Point anywhere at Japanese text."
+            contentDescription = "Full-screen live camera preview. Point anywhere at kanji; scanning is automatic."
         },
     ) {
         AndroidView(

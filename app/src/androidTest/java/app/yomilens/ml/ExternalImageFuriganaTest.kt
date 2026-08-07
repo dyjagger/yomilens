@@ -5,6 +5,7 @@ import android.graphics.Rect
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.yomilens.model.TextOrientation
 import app.yomilens.reading.JapaneseReadingEngine
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.tasks.await
@@ -36,6 +37,10 @@ class ExternalImageFuriganaTest {
             assertEquals(
                 listOf("橋", "花", "月", "友", "目", "色"),
                 recognition.regions.map(JapaneseOcrRegion::text),
+            )
+            assertTrue(
+                "Horizontal chart labels should stay horizontal",
+                recognition.regions.all { region -> region.orientation == TextOrientation.HORIZONTAL },
             )
             val annotated = JapaneseReadingEngine().annotate(detected)
             val kanjiTokens = annotated

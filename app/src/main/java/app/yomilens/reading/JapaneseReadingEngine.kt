@@ -2,6 +2,7 @@ package app.yomilens.reading
 
 import app.yomilens.model.ReadingLine
 import app.yomilens.model.ReadingToken
+import app.yomilens.text.JapaneseScript
 import com.atilika.kuromoji.ipadic.Token
 import com.atilika.kuromoji.ipadic.Tokenizer
 
@@ -32,6 +33,17 @@ class JapaneseReadingEngine(
                 }
                 append(romanized)
             }
+        }
+    }
+
+    fun romanizeKanji(lines: List<ReadingLine>): String = lines.mapNotNull { line ->
+        line.tokens.filter { token -> KanaScripts.containsKanji(token.surface) }
+            .takeIf(List<ReadingToken>::isNotEmpty)
+    }.joinToString("\n") { tokens ->
+        tokens.joinToString(" ") { token ->
+            val fullReading = KanaScripts.katakanaToHiragana(token.readingKatakana)
+            val kanjiReading = JapaneseScript.kanjiReading(token.surface, fullReading)
+            HepburnRomanizer.romanize(KanaScripts.hiraganaToKatakana(kanjiReading))
         }
     }
 

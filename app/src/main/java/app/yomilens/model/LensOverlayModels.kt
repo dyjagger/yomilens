@@ -1,5 +1,7 @@
 package app.yomilens.model
 
+import app.yomilens.text.JapaneseScript
+
 /** Bounds expressed as fractions of the full camera viewport. */
 data class NormalizedBounds(
     val left: Float,
@@ -21,10 +23,31 @@ data class LensOverlayItem(
     val readingLines: List<ReadingLine>,
     val romaji: String,
     val english: String? = null,
+    val orientation: TextOrientation = TextOrientation.HORIZONTAL,
 ) {
+    val kanjiReadingLines: List<ReadingLine>
+        get() = readingLines.mapNotNull { line ->
+            line.tokens.mapNotNull { token ->
+                if (!JapaneseScript.containsKanji(token.surface)) return@mapNotNull null
+                token.copy(
+                    surface = JapaneseScript.onlyKanji(token.surface),
+                    furigana = token.furigana?.let { reading ->
+                        JapaneseScript.kanjiReading(token.surface, reading)
+                    },
+                )
+            }
+                .takeIf(List<ReadingToken>::isNotEmpty)
+                ?.let(::ReadingLine)
+        }
+
+    val kanjiText: String
+        get() = kanjiReadingLines.joinToString("\n") { line ->
+            line.tokens.joinToString(" ", transform = ReadingToken::surface)
+        }
+
     val furigana: String
-        get() = readingLines.joinToString("\n") { line ->
-            line.tokens.joinToString("") { token -> token.furigana ?: token.surface }
+        get() = kanjiReadingLines.joinToString("\n") { line ->
+            line.tokens.joinToString(" ") { token -> token.furigana ?: token.surface }
         }
 }
 

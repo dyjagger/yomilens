@@ -1,5 +1,7 @@
 package app.yomilens.ml
 
+import app.yomilens.text.JapaneseScript
+
 /** Keeps OCR output focused on Japanese while preserving useful line boundaries. */
 object JapaneseTextCleaner {
     fun clean(rawText: String): String = rawText
@@ -10,6 +12,8 @@ object JapaneseTextCleaner {
         .trim()
 
     fun containsJapanese(text: String): Boolean = text.any(::isJapaneseCharacter)
+
+    fun containsKanji(text: String): Boolean = JapaneseScript.containsKanji(text)
 
     /** Text sent to readings/translation contains Japanese script and allow-listed punctuation only. */
     fun cleanForOverlay(rawText: String): String = clean(
@@ -60,9 +64,7 @@ object JapaneseTextCleaner {
 
     private fun isJapaneseCharacter(character: Char): Boolean =
         character.code in 0x3040..0x30FF ||
-            character.code in 0x3400..0x4DBF ||
-            character.code in 0x4E00..0x9FFF ||
-            character.code in 0xF900..0xFAFF ||
+            JapaneseScript.isKanji(character) ||
             character in setOf('々', '〆', 'ヶ', 'ヵ', 'ー')
 
     private val JAPANESE_PUNCTUATION = setOf(

@@ -1,6 +1,8 @@
 package app.yomilens.ml
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class JapaneseTextCleanerTest {
@@ -37,5 +39,13 @@ class JapaneseTextCleanerTest {
         val result = JapaneseTextCleaner.cleanForOverlay("日本語!?！？ ABC\n《「月」―…》。OPEN!")
 
         assertEquals("日本語\n《「月」―…》。", result)
+    }
+
+    @Test
+    fun kanjiDetectionRejectsBothKanaSyllabaries() {
+        assertFalse(JapaneseTextCleaner.containsKanji("ひらがな"))
+        assertFalse(JapaneseTextCleaner.containsKanji("カタカナ"))
+        assertFalse(JapaneseTextCleaner.containsKanji("ヶヵ"))
+        assertTrue(JapaneseTextCleaner.containsKanji("日本語です"))
     }
 }

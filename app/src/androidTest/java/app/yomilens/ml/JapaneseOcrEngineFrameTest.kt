@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Rect
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.yomilens.model.TextOrientation
 import com.google.android.gms.tasks.Tasks
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.tasks.await
@@ -26,9 +27,14 @@ class JapaneseOcrEngineFrameTest {
                 inputHeight = input.height
                 Tasks.forResult(
                     OcrRecognition(
-                        text = "SALE!?\n日本語！？",
+                        text = "SALE!?\n日本語！？\nカメラ",
                         regions = listOf(
-                            RawOcrRegion("日本語!? OPEN", OcrPixelBounds(20, 15, 120, 55)),
+                            RawOcrRegion(
+                                "日本語!? OPEN",
+                                OcrPixelBounds(20, 15, 120, 55),
+                                TextOrientation.VERTICAL,
+                            ),
+                            RawOcrRegion("カメラ", OcrPixelBounds(20, 60, 120, 90)),
                         ),
                     ),
                 )
@@ -50,6 +56,7 @@ class JapaneseOcrEngineFrameTest {
             assertEquals(160, inputWidth)
             assertEquals(80, inputHeight)
             assertEquals("日本語", result.regions.single().text)
+            assertEquals(TextOrientation.VERTICAL, result.regions.single().orientation)
             assertEquals(0.125f, result.regions.single().bounds.left, 0.0001f)
             assertEquals(0.1875f, result.regions.single().bounds.top, 0.0001f)
             assertEquals(0.75f, result.regions.single().bounds.right, 0.0001f)

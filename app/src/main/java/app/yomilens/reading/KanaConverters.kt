@@ -1,5 +1,7 @@
 package app.yomilens.reading
 
+import app.yomilens.text.JapaneseScript
+
 object KanaScripts {
     fun katakanaToHiragana(text: String): String = buildString(text.length) {
         text.forEach { character ->
@@ -25,12 +27,7 @@ object KanaScripts {
         }
     }
 
-    fun containsKanji(text: String): Boolean = text.any { character ->
-        character.code in 0x3400..0x4DBF ||
-            character.code in 0x4E00..0x9FFF ||
-            character.code in 0xF900..0xFAFF ||
-            character in setOf('々', '〆', 'ヶ', 'ヵ')
-    }
+    fun containsKanji(text: String): Boolean = JapaneseScript.containsKanji(text)
 }
 
 object HepburnRomanizer {

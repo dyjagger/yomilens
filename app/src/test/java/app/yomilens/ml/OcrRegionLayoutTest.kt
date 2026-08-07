@@ -1,5 +1,6 @@
 package app.yomilens.ml
 
+import app.yomilens.model.TextOrientation
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -66,6 +67,7 @@ class OcrRegionLayoutTest {
         )
 
         assertEquals(listOf("港に生えて鉄のキノコみたいな物体とか"), regions.map(RawOcrRegion::text))
+        assertEquals(TextOrientation.VERTICAL, regions.single().orientation)
     }
 
     @Test
@@ -159,6 +161,7 @@ class OcrRegionLayoutTest {
         )
 
         assertEquals(listOf("ーあれ"), regions.map(RawOcrRegion::text))
+        assertEquals(TextOrientation.VERTICAL, regions.single().orientation)
     }
 
     @Test
@@ -217,6 +220,21 @@ class OcrRegionLayoutTest {
         assertEquals("橋　花　月\n友　目　色", text)
     }
 
+    @Test
+    fun documentOverlayPlanningDropsKanaOnlyRegions() {
+        val regions = OcrRegionLayout.regionsForDocument(
+            listOf(
+                block("ひらがな", left = 20, top = 20),
+                block("カタカナ", left = 220, top = 20),
+                block("ヶヵ", left = 420, top = 20),
+                block("日本語です", left = 20, top = 140),
+            ),
+        )
+
+        assertEquals(listOf("日本語です"), regions.map(RawOcrRegion::text))
+        assertEquals(TextOrientation.HORIZONTAL, regions.single().orientation)
+    }
+
     private fun line(text: String, left: Int, top: Int): OcrPositionedLine = OcrPositionedLine(
         segments = listOf(
             OcrPositionedSegment(
@@ -265,6 +283,14 @@ class OcrRegionLayoutTest {
                 ),
             ),
             bounds = bounds,
+        )
+    }
+
+    private fun block(text: String, left: Int, top: Int): OcrPositionedBlock {
+        val line = line(text, left, top)
+        return OcrPositionedBlock(
+            lines = listOf(line),
+            bounds = line.bounds,
         )
     }
 

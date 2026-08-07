@@ -16,6 +16,8 @@ class KanaConvertersTest {
         assertTrue(KanaScripts.containsKanji("日本語"))
         assertFalse(KanaScripts.containsKanji("にほんご"))
         assertFalse(KanaScripts.containsKanji("カメラ"))
+        assertFalse(KanaScripts.containsKanji("ヶ"))
+        assertFalse(KanaScripts.containsKanji("ヵ"))
     }
 
     @Test

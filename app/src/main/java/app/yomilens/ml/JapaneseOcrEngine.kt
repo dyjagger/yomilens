@@ -5,6 +5,7 @@ import android.graphics.Matrix
 import android.graphics.Rect
 import androidx.camera.core.ImageProxy
 import app.yomilens.model.NormalizedBounds
+import app.yomilens.model.TextOrientation
 import com.google.android.gms.tasks.Task
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
@@ -22,6 +23,7 @@ data class CapturedFrame(
 data class JapaneseOcrRegion(
     val text: String,
     val bounds: NormalizedBounds,
+    val orientation: TextOrientation = TextOrientation.HORIZONTAL,
 )
 
 /** The upright captured viewport stays in memory so overlays cannot drift off the source text. */
@@ -79,10 +81,15 @@ class JapaneseOcrEngine(
             textRecognition(InputImage.fromBitmap(inputBitmap, 0))
                 .continueWith { task ->
                     val raw = task.result
-                    val cleanedText = JapaneseTextCleaner.cleanForOverlay(raw.text)
-                    val mappedRegions = raw.regions.mapNotNull { region ->
+                    val kanjiRegions = raw.regions.filter { region ->
+                        JapaneseTextCleaner.containsKanji(region.text)
+                    }
+                    val cleanedText = JapaneseTextCleaner.cleanForOverlay(
+                        if (kanjiRegions.isEmpty()) raw.text else OcrRegionLayout.textForRegions(kanjiRegions),
+                    ).takeIf(JapaneseTextCleaner::containsKanji).orEmpty()
+                    val mappedRegions = kanjiRegions.mapNotNull { region ->
                         val cleanedRegion = JapaneseTextCleaner.cleanForOverlay(region.text)
-                        cleanedRegion.takeIf(String::isNotBlank)?.let {
+                        cleanedRegion.takeIf(JapaneseTextCleaner::containsKanji)?.let {
                             JapaneseOcrRegion(
                                 text = it,
                                 bounds = region.bounds.toNormalizedBounds(
@@ -90,10 +97,11 @@ class JapaneseOcrEngine(
                                     fullWidth = retainedFrame.width,
                                     fullHeight = retainedFrame.height,
                                 ),
+                                orientation = region.orientation,
                             )
                         }
                     }.ifEmpty {
-                        cleanedText.takeIf(String::isNotBlank)?.let {
+                        cleanedText.takeIf(JapaneseTextCleaner::containsKanji)?.let {
                             listOf(
                                 JapaneseOcrRegion(
                                     text = it,
@@ -149,7 +157,7 @@ private fun extractRecognition(text: Text): OcrRecognition {
                 bounds = block.boundingBox?.toPixelBounds(),
             )
         },
-    )
+    ).filter { region -> JapaneseTextCleaner.containsKanji(region.text) }
     return OcrRecognition(
         text = OcrRegionLayout.textForRegions(regions),
         regions = regions,

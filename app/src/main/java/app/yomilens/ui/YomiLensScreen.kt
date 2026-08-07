@@ -39,10 +39,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +59,7 @@ import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -66,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -74,6 +79,8 @@ import app.yomilens.model.LensOverlayItem
 import app.yomilens.model.OverlayLabelSpec
 import app.yomilens.model.LensOverlayPlacement
 import app.yomilens.model.OutputMode
+import app.yomilens.model.TextOrientation
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 @Composable
@@ -106,6 +113,41 @@ fun YomiLensRoute(viewModel: YomiLensViewModel) {
     }
     val mainExecutor = remember(context) { ContextCompat.getMainExecutor(context) }
     var cameraController by remember { mutableStateOf<CameraScanController?>(null) }
+    val currentAutoCapture = rememberUpdatedState {
+        val controller = cameraController
+        if (
+            controller != null &&
+            viewModel.tryBeginCapture(controller.isStreaming())
+        ) {
+            try {
+                imageCapture.takePicture(
+                    mainExecutor,
+                    object : ImageCapture.OnImageCapturedCallback() {
+                        override fun onCaptureSuccess(image: ImageProxy) {
+                            viewModel.onImageCaptured(image)
+                        }
+
+                        override fun onError(exception: ImageCaptureException) {
+                            viewModel.onCaptureFailed(
+                                exception.message ?: "The photo could not be captured. Retrying automatically.",
+                            )
+                        }
+                    },
+                )
+            } catch (error: Exception) {
+                viewModel.onCaptureFailed(
+                    error.message ?: "The photo could not be captured. Retrying automatically.",
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(hasCameraPermission, cameraController, state.isBusy) {
+        if (hasCameraPermission && cameraController != null && !state.isBusy) {
+            delay(AUTO_SCAN_INTERVAL_MILLIS)
+            currentAutoCapture.value()
+        }
+    }
 
     YomiLensScreen(
         state = state,
@@ -114,36 +156,6 @@ fun YomiLensRoute(viewModel: YomiLensViewModel) {
         imageCapture = imageCapture,
         onRequestCamera = { permissionLauncher.launch(Manifest.permission.CAMERA) },
         onModeSelected = viewModel::selectMode,
-        onScan = {
-            val controller = cameraController
-            if (controller == null) {
-                viewModel.onCaptureFailed("The camera is still starting. Please wait a moment and try again.")
-                return@YomiLensScreen
-            }
-            viewModel.beginCapture()
-            controller.focusCenter {
-                try {
-                    imageCapture.takePicture(
-                        mainExecutor,
-                        object : ImageCapture.OnImageCapturedCallback() {
-                            override fun onCaptureSuccess(image: ImageProxy) {
-                                viewModel.onImageCaptured(image)
-                            }
-
-                            override fun onError(exception: ImageCaptureException) {
-                                viewModel.onCaptureFailed(
-                                    exception.message ?: "The photo could not be captured. Please try again.",
-                                )
-                            }
-                        },
-                    )
-                } catch (error: Exception) {
-                    viewModel.onCaptureFailed(
-                        error.message ?: "The photo could not be captured. Please try again.",
-                    )
-                }
-            }
-        },
         onRetryEnglish = viewModel::retryEnglish,
         onCameraError = viewModel::onCaptureFailed,
         onCameraReady = { cameraController = it },
@@ -158,7 +170,6 @@ fun YomiLensScreen(
     imageCapture: ImageCapture,
     onRequestCamera: () -> Unit,
     onModeSelected: (OutputMode) -> Unit,
-    onScan: () -> Unit,
     onRetryEnglish: () -> Unit,
     onCameraError: (String) -> Unit,
     onCameraReady: (CameraScanController?) -> Unit,
@@ -226,7 +237,6 @@ fun YomiLensScreen(
             hasCameraPermission = hasCameraPermission,
             isCameraReady = isCameraReady,
             onModeSelected = onModeSelected,
-            onScan = onScan,
             onRetryEnglish = onRetryEnglish,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -364,15 +374,53 @@ private fun TranslationBubble(label: OverlayLabelContent, outlineColor: Color) {
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, outlineColor.copy(alpha = 0.95f)),
     ) {
-        Text(
-            text = label.text,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-            fontSize = 16.sp,
-            lineHeight = 19.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (label.item.orientation == TextOrientation.VERTICAL) {
+            VerticalOverlayText(label)
+        } else {
+            Text(
+                text = label.text,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                fontSize = 16.sp,
+                lineHeight = 19.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun VerticalOverlayText(label: OverlayLabelContent) {
+    val columns = label.text.filterNot { character -> character == '\r' }
+        .chunked(MAX_VERTICAL_GLYPHS_PER_COLUMN)
+        .asReversed()
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 6.dp, vertical = 5.dp)
+                .testTag("vertical_overlay_text_${label.index}"),
+            horizontalArrangement = Arrangement.spacedBy(1.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            columns.forEach { column ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    column.forEach { character ->
+                        if (character.isWhitespace()) {
+                            Spacer(Modifier.height(7.dp))
+                        } else {
+                            Text(
+                                text = character.toString(),
+                                fontSize = 15.sp,
+                                lineHeight = 17.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -391,12 +439,13 @@ private fun LensTopBar(
 ) {
     val message = when {
         !isCameraReady -> "Starting camera…"
-        phase == ScanPhase.CAPTURING -> "Focusing and capturing…"
-        phase == ScanPhase.RECOGNIZING -> "Reading Japanese…"
+        phase == ScanPhase.CAPTURING -> "Capturing automatically…"
+        phase == ScanPhase.RECOGNIZING -> "Reading kanji…"
         phase == ScanPhase.PREPARING_ENGLISH -> "Preparing English…"
-        phase == ScanPhase.ERROR -> "Check the message below"
-        itemCount > 0 -> "$itemCount text ${if (itemCount == 1) "area" else "areas"} found"
-        else -> "Point at Japanese • tap the image to focus"
+        phase == ScanPhase.ERROR -> "Retrying automatically…"
+        itemCount > 0 -> "$itemCount kanji ${if (itemCount == 1) "area" else "areas"} found"
+        phase == ScanPhase.READY -> "No kanji in view • scanning automatically"
+        else -> "Point at kanji • scanning automatically"
     }
     Row(
         modifier = modifier
@@ -446,7 +495,6 @@ private fun LensControls(
     hasCameraPermission: Boolean,
     isCameraReady: Boolean,
     onModeSelected: (OutputMode) -> Unit,
-    onScan: () -> Unit,
     onRetryEnglish: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -482,24 +530,23 @@ private fun LensControls(
                 } else {
                     Spacer(Modifier.height(7.dp))
                 }
-                Button(
-                    onClick = onScan,
-                    enabled = hasCameraPermission && isCameraReady && !state.isBusy,
+                Text(
+                    text = if (hasCameraPermission && isCameraReady) {
+                        "Automatic kanji scanning is on • tap the lens to focus"
+                    } else {
+                        "Automatic scanning starts when the camera is ready"
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
-                        .testTag("scan_button"),
-                    shape = RoundedCornerShape(15.dp),
-                ) {
-                    Text(
-                        when {
-                            state.frozenFrame != null -> "Scan again"
-                            state.selectedMode == OutputMode.ENGLISH -> "Scan & translate with Google"
-                            else -> "Scan Japanese"
+                        .padding(horizontal = 4.dp, vertical = 5.dp)
+                        .testTag("auto_scan_status")
+                        .semantics {
+                            contentDescription = "Completed automatic scans: ${state.completedScanCount}"
                         },
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -625,3 +672,6 @@ private fun GoogleTranslationLinks() {
         )
     }
 }
+
+private const val AUTO_SCAN_INTERVAL_MILLIS = 1_500L
+private const val MAX_VERTICAL_GLYPHS_PER_COLUMN = 10

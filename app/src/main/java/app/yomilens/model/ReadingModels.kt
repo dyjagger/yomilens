@@ -6,6 +6,11 @@ enum class OutputMode(val label: String) {
     ENGLISH("English"),
 }
 
+enum class TextOrientation {
+    HORIZONTAL,
+    VERTICAL,
+}
+
 data class ReadingToken(
     val surface: String,
     val furigana: String?,

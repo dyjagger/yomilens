@@ -27,6 +27,16 @@ class JapaneseReadingEngineTest {
     }
 
     @Test
+    fun overlayRomajiIncludesOnlyKanjiBearingTokens() {
+        val lines = engine.annotate("日本語を勉強します。カメラ")
+
+        assertEquals("nihongo benkyou", engine.romanizeKanji(lines))
+        assertEquals("", engine.romanizeKanji(engine.annotate("ひらがなとカタカナ")))
+        assertEquals("ta", engine.romanizeKanji(engine.annotate("食べる")))
+        assertEquals("toatsuka", engine.romanizeKanji(engine.annotate("取り扱い")))
+    }
+
+    @Test
     fun preservesDetectedLineBoundaries() {
         val lines = engine.annotate("日本語\n英語")
 

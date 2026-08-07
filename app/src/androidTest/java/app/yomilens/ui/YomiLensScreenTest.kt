@@ -8,10 +8,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.LayoutDirection
@@ -20,6 +22,7 @@ import app.yomilens.model.LensOverlayItem
 import app.yomilens.model.NormalizedBounds
 import app.yomilens.model.ReadingLine
 import app.yomilens.model.ReadingToken
+import app.yomilens.model.TextOrientation
 import app.yomilens.ui.theme.YomiLensTheme
 import org.junit.Rule
 import org.junit.Assert.assertTrue
@@ -41,7 +44,6 @@ class YomiLensScreenTest {
                     imageCapture = ImageCapture.Builder().build(),
                     onRequestCamera = {},
                     onModeSelected = { state = state.copy(selectedMode = it) },
-                    onScan = {},
                     onRetryEnglish = {},
                     onCameraError = {},
                     onCameraReady = {},
@@ -50,15 +52,72 @@ class YomiLensScreenTest {
         }
 
         composeRule.onNodeWithTag("mode_furigana").assertIsSelected()
-        composeRule.onNodeWithText("にほんごをべんきょうします。").assertIsDisplayed()
+        composeRule.onNodeWithText("にほんご べんきょう").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("vertical_overlay_text_0").assertCountEquals(0)
 
         composeRule.onNodeWithTag("mode_romaji").performClick()
         composeRule.onNodeWithTag("mode_romaji").assertIsSelected()
-        composeRule.onNodeWithText("nihongo o benkyou shimasu.").assertIsDisplayed()
+        composeRule.onNodeWithText("nihongo benkyou").assertIsDisplayed()
 
         composeRule.onNodeWithTag("mode_english").performClick()
         composeRule.onNodeWithTag("mode_english").assertIsSelected()
         composeRule.onNodeWithText("I study Japanese.").assertIsDisplayed()
+    }
+
+    @Test
+    fun cameraControlsDescribeAutomaticScanningWithoutAScanButton() {
+        composeRule.setContent {
+            YomiLensTheme {
+                YomiLensScreen(
+                    state = YomiLensUiState(),
+                    hasCameraPermission = false,
+                    isCameraReady = false,
+                    imageCapture = ImageCapture.Builder().build(),
+                    onRequestCamera = {},
+                    onModeSelected = {},
+                    onRetryEnglish = {},
+                    onCameraError = {},
+                    onCameraReady = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("auto_scan_status").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("scan_button").assertCountEquals(0)
+    }
+
+    @Test
+    fun verticallyDetectedMangaUsesAVerticalTranslationLabel() {
+        val state = sampleState().copy(
+            selectedMode = OutputMode.ENGLISH,
+            overlayItems = sampleState().overlayItems.map { item ->
+                item.copy(orientation = TextOrientation.VERTICAL, english = "ABCDEFGHIJK")
+            },
+        )
+        composeRule.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                YomiLensTheme {
+                    YomiLensScreen(
+                        state = state,
+                        hasCameraPermission = false,
+                        isCameraReady = false,
+                        imageCapture = ImageCapture.Builder().build(),
+                        onRequestCamera = {},
+                        onModeSelected = {},
+                        onRetryEnglish = {},
+                        onCameraError = {},
+                        onCameraReady = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("vertical_overlay_text_0").assertIsDisplayed()
+        val first = composeRule.onNodeWithText("A").getUnclippedBoundsInRoot()
+        val second = composeRule.onNodeWithText("B").getUnclippedBoundsInRoot()
+        val wrapped = composeRule.onNodeWithText("K").getUnclippedBoundsInRoot()
+        assertTrue("Vertical text should progress downward: $first then $second", first.top < second.top)
+        assertTrue("Later columns should wrap to the left: $first then $wrapped", first.left > wrapped.left)
     }
 
     @Test
@@ -75,7 +134,6 @@ class YomiLensScreenTest {
                     imageCapture = ImageCapture.Builder().build(),
                     onRequestCamera = {},
                     onModeSelected = {},
-                    onScan = {},
                     onRetryEnglish = {},
                     onCameraError = {},
                     onCameraReady = {},
@@ -110,7 +168,6 @@ class YomiLensScreenTest {
                     imageCapture = ImageCapture.Builder().build(),
                     onRequestCamera = {},
                     onModeSelected = {},
-                    onScan = {},
                     onRetryEnglish = {},
                     onCameraError = {},
                     onCameraReady = {},
@@ -156,7 +213,6 @@ class YomiLensScreenTest {
                     imageCapture = ImageCapture.Builder().build(),
                     onRequestCamera = {},
                     onModeSelected = {},
-                    onScan = {},
                     onRetryEnglish = {},
                     onCameraError = {},
                     onCameraReady = {},
@@ -197,7 +253,6 @@ class YomiLensScreenTest {
                         imageCapture = ImageCapture.Builder().build(),
                         onRequestCamera = {},
                         onModeSelected = {},
-                        onScan = {},
                         onRetryEnglish = {},
                         onCameraError = {},
                         onCameraReady = {},

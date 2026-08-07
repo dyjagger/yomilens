@@ -1,5 +1,7 @@
 package app.yomilens.ml
 
+import app.yomilens.model.TextOrientation
+
 data class OcrPixelBounds(
     val left: Int,
     val top: Int,
@@ -10,6 +12,7 @@ data class OcrPixelBounds(
 data class RawOcrRegion(
     val text: String,
     val bounds: OcrPixelBounds?,
+    val orientation: TextOrientation = TextOrientation.HORIZONTAL,
 )
 
 data class OcrRecognition(
@@ -43,7 +46,7 @@ object OcrRegionLayout {
                 lines = group.flatMap(OcrPositionedBlock::lines),
                 blockBounds = group.mapNotNull(OcrPositionedBlock::bounds).unionBounds(),
             )
-        }
+        }.filter { region -> JapaneseTextCleaner.containsKanji(region.text) }
 
     fun textForRegions(regions: List<RawOcrRegion>): String {
         if (regions.isEmpty()) return ""
@@ -83,6 +86,7 @@ object OcrRegionLayout {
                         .mapNotNull(OcrPositionedSegment::bounds)
                         .unionBounds()
                         ?: blockBounds,
+                    orientation = TextOrientation.VERTICAL,
                 ),
             )
         }
@@ -102,6 +106,7 @@ object OcrRegionLayout {
                         .mapNotNull(OcrPositionedSegment::bounds)
                         .unionBounds()
                         ?: blockBounds,
+                    orientation = japaneseLines.detectedOrientation(),
                 ),
             )
         }
@@ -116,6 +121,7 @@ object OcrRegionLayout {
                     text = text,
                     bounds = group.mapNotNull(OcrPositionedSegment::bounds).unionBounds()
                         ?: line.bounds,
+                    orientation = line.detectedOrientation(),
                 )
             }
         }
@@ -189,6 +195,16 @@ object OcrRegionLayout {
         }
     }
 }
+
+private fun List<OcrPositionedLine>.detectedOrientation(): TextOrientation =
+    if (count { line -> line.angleDegrees.isVerticalAngle() } > size / 2) {
+        TextOrientation.VERTICAL
+    } else {
+        TextOrientation.HORIZONTAL
+    }
+
+private fun OcrPositionedLine.detectedOrientation(): TextOrientation =
+    if (angleDegrees.isVerticalAngle()) TextOrientation.VERTICAL else TextOrientation.HORIZONTAL
 
 private fun RawOcrRegion.sharesTextRowWith(other: RawOcrRegion): Boolean {
     val first = bounds ?: return false

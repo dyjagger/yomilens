@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Rect
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.yomilens.model.TextOrientation
 import app.yomilens.reading.JapaneseReadingEngine
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.tasks.await
@@ -44,11 +45,18 @@ class OpenLicensedMangaOcrTest {
 
         try {
             val regions = recognition.regions.map(JapaneseOcrRegion::text)
-            assertTrue("Manga should produce multiple positioned overlays: $regions", regions.size >= 5)
+            assertTrue("Manga should produce multiple kanji overlays: $regions", regions.size >= 4)
             assertTrue("Split title answer should be one compound: $regions", "係船柱" in regions)
             assertTrue("First balloon has wrong vertical order: $regions", EXPECTED_HARBOR_TEXT in regions)
             assertTrue("Second balloon has wrong vertical order: $regions", EXPECTED_NAME_TEXT in regions)
             assertTrue("Third balloon has wrong vertical order: $regions", EXPECTED_MOORING_TEXT in regions)
+            listOf("係船柱", EXPECTED_HARBOR_TEXT, EXPECTED_NAME_TEXT, EXPECTED_MOORING_TEXT).forEach { text ->
+                assertEquals(
+                    "Manga overlay should retain vertical direction for: $text",
+                    TextOrientation.VERTICAL,
+                    recognition.regions.single { region -> region.text == text }.orientation,
+                )
+            }
 
             val readingEngine = JapaneseReadingEngine()
             val readings = readingEngine.annotate("係船柱")
