@@ -119,25 +119,32 @@ fun YomiLensRoute(viewModel: YomiLensViewModel) {
             controller != null &&
             viewModel.tryBeginCapture(controller.isStreaming())
         ) {
-            try {
-                imageCapture.takePicture(
-                    mainExecutor,
-                    object : ImageCapture.OnImageCapturedCallback() {
-                        override fun onCaptureSuccess(image: ImageProxy) {
-                            viewModel.onImageCaptured(image)
-                        }
+            controller.focusCenter {
+                if (!controller.isStreaming()) {
+                    viewModel.onCaptureFailed("The camera stream paused. Retrying automatically.")
+                } else {
+                    try {
+                        imageCapture.takePicture(
+                            mainExecutor,
+                            object : ImageCapture.OnImageCapturedCallback() {
+                                override fun onCaptureSuccess(image: ImageProxy) {
+                                    viewModel.onImageCaptured(image)
+                                }
 
-                        override fun onError(exception: ImageCaptureException) {
-                            viewModel.onCaptureFailed(
-                                exception.message ?: "The photo could not be captured. Retrying automatically.",
-                            )
-                        }
-                    },
-                )
-            } catch (error: Exception) {
-                viewModel.onCaptureFailed(
-                    error.message ?: "The photo could not be captured. Retrying automatically.",
-                )
+                                override fun onError(exception: ImageCaptureException) {
+                                    viewModel.onCaptureFailed(
+                                        exception.message
+                                            ?: "The photo could not be captured. Retrying automatically.",
+                                    )
+                                }
+                            },
+                        )
+                    } catch (error: Exception) {
+                        viewModel.onCaptureFailed(
+                            error.message ?: "The photo could not be captured. Retrying automatically.",
+                        )
+                    }
+                }
             }
         }
     }

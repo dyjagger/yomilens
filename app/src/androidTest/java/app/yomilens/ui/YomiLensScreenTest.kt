@@ -283,7 +283,7 @@ class YomiLensScreenTest {
                 ),
             ),
         ),
-        romaji = "nihongo o benkyou shimasu.",
+        romaji = "nihongo benkyou",
         english = "I study Japanese.",
         overlayItems = listOf(
             LensOverlayItem(
@@ -301,7 +301,7 @@ class YomiLensScreenTest {
                         ),
                     ),
                 ),
-                romaji = "nihongo o benkyou shimasu.",
+                romaji = "nihongo benkyou",
                 english = "I study Japanese.",
             ),
         ),
