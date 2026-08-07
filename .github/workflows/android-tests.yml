@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      YOMILENS_KEYSTORE_PATH: ${{ runner.temp }}/yomilens-debug.keystore
+      YOMILENS_KEYSTORE_PATH: /tmp/yomilens-debug.keystore
 
     steps:
       - name: Check out source
