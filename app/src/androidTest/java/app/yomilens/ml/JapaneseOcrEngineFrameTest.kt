@@ -26,9 +26,9 @@ class JapaneseOcrEngineFrameTest {
                 inputHeight = input.height
                 Tasks.forResult(
                     OcrRecognition(
-                        text = "SALE\n日本語",
+                        text = "SALE!?\n日本語！？",
                         regions = listOf(
-                            RawOcrRegion("日本語", OcrPixelBounds(20, 15, 120, 55)),
+                            RawOcrRegion("日本語!? OPEN", OcrPixelBounds(20, 15, 120, 55)),
                         ),
                     ),
                 )

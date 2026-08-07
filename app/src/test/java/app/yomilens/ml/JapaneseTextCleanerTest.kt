@@ -31,4 +31,11 @@ class JapaneseTextCleanerTest {
 
         assertEquals("東京 Station\nカメラ TEST", result)
     }
+
+    @Test
+    fun overlayTextRemovesNonJapanesePunctuationAndLatinText() {
+        val result = JapaneseTextCleaner.cleanForOverlay("日本語!?！？ ABC\n《「月」―…》。OPEN!")
+
+        assertEquals("日本語\n《「月」―…》。", result)
+    }
 }

@@ -32,6 +32,26 @@ class OcrRegionLayoutTest {
         assertEquals(listOf("橋", "花", "月", "友", "目", "色"), regions.map(RawOcrRegion::text))
     }
 
+    @Test
+    fun ignoresNonJapaneseElementsAndPunctuationDuringOverlayPlanning() {
+        val regions = OcrRegionLayout.regionsForBlock(
+            lines = listOf(
+                OcrPositionedLine(
+                    segments = listOf(
+                        OcrPositionedSegment("日本語!?", OcrPixelBounds(20, 20, 150, 70)),
+                        OcrPositionedSegment("!", OcrPixelBounds(170, 20, 180, 70)),
+                        OcrPositionedSegment("OPEN", OcrPixelBounds(220, 20, 320, 70)),
+                    ),
+                    bounds = OcrPixelBounds(20, 20, 320, 70),
+                ),
+            ),
+            blockBounds = OcrPixelBounds(20, 20, 320, 70),
+        )
+
+        assertEquals(listOf("日本語"), regions.map(RawOcrRegion::text))
+        assertEquals(OcrPixelBounds(20, 20, 150, 70), regions.single().bounds)
+    }
+
     private fun line(text: String, left: Int, top: Int): OcrPositionedLine = OcrPositionedLine(
         segments = listOf(
             OcrPositionedSegment(

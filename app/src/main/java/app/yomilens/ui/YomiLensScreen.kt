@@ -16,7 +16,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,11 +24,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,6 +52,7 @@ import androidx.compose.ui.geometry.Size as ComposeSize
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -67,14 +65,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.yomilens.model.LensOverlayItem
+import app.yomilens.model.OverlayLabelSpec
 import app.yomilens.model.LensOverlayPlacement
 import app.yomilens.model.OutputMode
 import kotlin.math.roundToInt
@@ -248,17 +245,13 @@ private fun TranslationOverlayLayer(
 ) {
     val outlineColor = MaterialTheme.colorScheme.secondary
     val density = LocalDensity.current
-    BoxWithConstraints(modifier.testTag("translation_overlay_layer")) {
-        val viewportWidth = constraints.maxWidth.toFloat()
-        val viewportHeight = constraints.maxHeight.toFloat()
-        val edgePadding = with(density) { 8.dp.toPx() }
-        val fallbackLabelWidth = with(density) { 160.dp.toPx() }
-        val fallbackLabelHeight = with(density) { 42.dp.toPx() }
-        val topReserved = topReservedPixels.takeIf { it > 0f }
-            ?: with(density) { 68.dp.toPx() }
-        val bottomReserved = bottomReservedPixels.takeIf { it > 0f }
-            ?: with(density) { 204.dp.toPx() }
-
+    val edgePadding = with(density) { 8.dp.toPx() }
+    val collisionGap = with(density) { 6.dp.toPx() }
+    val topReserved = topReservedPixels.takeIf { it > 0f }
+        ?: with(density) { 68.dp.toPx() }
+    val bottomReserved = bottomReservedPixels.takeIf { it > 0f }
+        ?: with(density) { 204.dp.toPx() }
+    Box(modifier.testTag("translation_overlay_layer")) {
         Canvas(Modifier.fillMaxSize()) {
             items.forEach { item ->
                 val left = item.bounds.left * size.width
@@ -274,52 +267,112 @@ private fun TranslationOverlayLayer(
                 )
             }
         }
+        CollisionAwareOverlayLabels(
+            items = items,
+            mode = mode,
+            outlineColor = outlineColor,
+            edgePadding = edgePadding,
+            collisionGap = collisionGap,
+            topReserved = topReserved,
+            bottomReserved = bottomReserved,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
 
-        items.forEachIndexed { index, item ->
-            val label = item.labelFor(mode)
-            if (label.isBlank()) return@forEachIndexed
-            var measuredLabelSize by remember(item, mode, label) { mutableStateOf(IntSize.Zero) }
-            val labelWidth = measuredLabelSize.width.takeIf { it > 0 }?.toFloat()
-                ?: fallbackLabelWidth.coerceAtMost(viewportWidth - edgePadding * 2f)
-            val labelHeight = measuredLabelSize.height.takeIf { it > 0 }?.toFloat()
-                ?: fallbackLabelHeight
-            val placement = LensOverlayPlacement.calculate(
-                bounds = item.bounds,
-                viewportWidth = viewportWidth,
-                viewportHeight = viewportHeight,
-                labelWidth = labelWidth,
-                labelHeight = labelHeight,
-                edgePadding = edgePadding,
-                topReserved = topReserved,
-                bottomReserved = bottomReserved,
+private data class OverlayLabelContent(
+    val index: Int,
+    val item: LensOverlayItem,
+    val text: String,
+)
+
+@Composable
+private fun CollisionAwareOverlayLabels(
+    items: List<LensOverlayItem>,
+    mode: OutputMode,
+    outlineColor: Color,
+    edgePadding: Float,
+    collisionGap: Float,
+    topReserved: Float,
+    bottomReserved: Float,
+    modifier: Modifier = Modifier,
+) {
+    val labels = items.mapIndexedNotNull { index, item ->
+        item.labelFor(mode).takeIf(String::isNotBlank)?.let { label ->
+            OverlayLabelContent(index, item, label)
+        }
+    }
+    SubcomposeLayout(modifier) { constraints ->
+        val maximumLabelWidth = (constraints.maxWidth - edgePadding * 2f)
+            .roundToInt()
+            .coerceAtLeast(1)
+        val maximumLabelHeight = (
+            constraints.maxHeight -
+                maxOf(topReserved, edgePadding) -
+                bottomReserved
+            ).roundToInt().coerceAtLeast(1)
+        val measured = labels.map { label ->
+            val placeable = subcompose(label.index to label.text) {
+                TranslationBubble(label, outlineColor)
+            }.single().measure(
+                Constraints(
+                    maxWidth = maximumLabelWidth,
+                    maxHeight = maximumLabelHeight,
+                ),
             )
-            val maximumWidth = with(density) { placement.maxWidth.toDp() }
-            Surface(
-                modifier = Modifier
-                    .offset { IntOffset(placement.x.roundToInt(), placement.y.roundToInt()) }
-                    .widthIn(max = maximumWidth)
-                    .onSizeChanged { measuredLabelSize = it }
-                    .zIndex(2f)
-                    .testTag("overlay_$index")
-                    .semantics {
-                        contentDescription = "${item.japanese}: $label"
-                    },
-                color = Color.Black.copy(alpha = 0.78f),
-                contentColor = Color.White,
-                shape = RoundedCornerShape(8.dp),
-                border = BorderStroke(1.dp, outlineColor.copy(alpha = 0.9f)),
-            ) {
-                Text(
-                    text = label,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                    fontSize = 16.sp,
-                    lineHeight = 19.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+            label to placeable
+        }
+        val placements = LensOverlayPlacement.calculateAll(
+            specs = measured.map { (label, placeable) ->
+                OverlayLabelSpec(
+                    id = label.index,
+                    bounds = label.item.bounds,
+                    width = placeable.width.toFloat(),
+                    height = placeable.height.toFloat(),
                 )
+            },
+            viewportWidth = constraints.maxWidth.toFloat(),
+            viewportHeight = constraints.maxHeight.toFloat(),
+            edgePadding = edgePadding,
+            topReserved = topReserved,
+            bottomReserved = bottomReserved,
+            collisionGap = collisionGap,
+        )
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            measured.forEach { (label, placeable) ->
+                placements[label.index]?.let { placement ->
+                    placeable.place(
+                        x = placement.x.roundToInt(),
+                        y = placement.y.roundToInt(),
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun TranslationBubble(label: OverlayLabelContent, outlineColor: Color) {
+    Surface(
+        modifier = Modifier
+            .testTag("overlay_${label.index}")
+            .semantics {
+                contentDescription = "${label.item.japanese}: ${label.text}"
+            },
+        color = Color.Black.copy(alpha = 0.82f),
+        contentColor = Color.White,
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, outlineColor.copy(alpha = 0.95f)),
+    ) {
+        Text(
+            text = label.text,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+            fontSize = 16.sp,
+            lineHeight = 19.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

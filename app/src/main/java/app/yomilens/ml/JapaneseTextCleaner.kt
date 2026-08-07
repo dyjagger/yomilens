@@ -11,6 +11,21 @@ object JapaneseTextCleaner {
 
     fun containsJapanese(text: String): Boolean = text.any(::isJapaneseCharacter)
 
+    /** Text sent to readings/translation contains Japanese script and allow-listed punctuation only. */
+    fun cleanForOverlay(rawText: String): String = clean(
+        buildString(rawText.length) {
+            rawText.forEach { character ->
+                if (
+                    character.isWhitespace() ||
+                    isJapaneseCharacter(character) ||
+                    character in JAPANESE_PUNCTUATION
+                ) {
+                    append(character)
+                }
+            }
+        },
+    )
+
     private fun normalizeLine(line: String): String {
         val trimmed = line.trim()
         return buildString(trimmed.length) {
@@ -49,4 +64,28 @@ object JapaneseTextCleaner {
             character.code in 0x4E00..0x9FFF ||
             character.code in 0xF900..0xFAFF ||
             character in setOf('々', '〆', 'ヶ', 'ヵ', 'ー')
+
+    private val JAPANESE_PUNCTUATION = setOf(
+        '、',
+        '。',
+        '「',
+        '」',
+        '『',
+        '』',
+        '（',
+        '）',
+        '【',
+        '】',
+        '〔',
+        '〕',
+        '〈',
+        '〉',
+        '《',
+        '》',
+        '〜',
+        '～',
+        '…',
+        '‥',
+        '―',
+    )
 }

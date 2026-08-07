@@ -79,9 +79,9 @@ class JapaneseOcrEngine(
             textRecognition(InputImage.fromBitmap(inputBitmap, 0))
                 .continueWith { task ->
                     val raw = task.result
-                    val cleanedText = JapaneseTextCleaner.clean(raw.text)
+                    val cleanedText = JapaneseTextCleaner.cleanForOverlay(raw.text)
                     val mappedRegions = raw.regions.mapNotNull { region ->
-                        val cleanedRegion = JapaneseTextCleaner.clean(region.text)
+                        val cleanedRegion = JapaneseTextCleaner.cleanForOverlay(region.text)
                         cleanedRegion.takeIf(String::isNotBlank)?.let {
                             JapaneseOcrRegion(
                                 text = it,

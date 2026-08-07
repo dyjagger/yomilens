@@ -35,18 +35,26 @@ object OcrRegionLayout {
         lines: List<OcrPositionedLine>,
         blockBounds: OcrPixelBounds?,
     ): List<RawOcrRegion> {
-        val groupsByLine = lines.map { line -> splitLine(line.segments) }
+        val japaneseLines = lines.map { line ->
+            line.copy(
+                segments = line.segments.mapNotNull { segment ->
+                    val japanese = JapaneseTextCleaner.cleanForOverlay(segment.text)
+                    segment.copy(text = japanese).takeIf { japanese.isNotBlank() }
+                },
+            )
+        }
+        val groupsByLine = japaneseLines.map { line -> splitLine(line.segments) }
         val containsSeparatedLabels = groupsByLine.any { groups -> groups.size > 1 }
 
         if (!containsSeparatedLabels) {
             val text = OcrLayoutReconstructor.reconstruct(
-                lines.map { line -> line.segments.map(OcrPositionedSegment::horizontalSegment) },
+                japaneseLines.map { line -> line.segments.map(OcrPositionedSegment::horizontalSegment) },
             )
             if (!JapaneseTextCleaner.containsJapanese(text)) return emptyList()
             return listOf(
                 RawOcrRegion(
                     text = text,
-                    bounds = lines.flatMap(OcrPositionedLine::segments)
+                    bounds = japaneseLines.flatMap(OcrPositionedLine::segments)
                         .mapNotNull(OcrPositionedSegment::bounds)
                         .unionBounds()
                         ?: blockBounds,
@@ -54,7 +62,7 @@ object OcrRegionLayout {
             )
         }
 
-        return lines.flatMapIndexed { lineIndex, line ->
+        return japaneseLines.flatMapIndexed { lineIndex, line ->
             groupsByLine[lineIndex].mapNotNull { group ->
                 val text = OcrLayoutReconstructor.reconstructLine(
                     group.map(OcrPositionedSegment::horizontalSegment),

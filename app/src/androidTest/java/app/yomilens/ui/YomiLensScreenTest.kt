@@ -2,9 +2,11 @@ package app.yomilens.ui
 
 import android.graphics.Bitmap
 import androidx.camera.core.ImageCapture
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -12,6 +14,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.LayoutDirection
 import app.yomilens.model.OutputMode
 import app.yomilens.model.LensOverlayItem
 import app.yomilens.model.NormalizedBounds
@@ -119,6 +122,94 @@ class YomiLensScreenTest {
         val labelBounds = composeRule.onNodeWithTag("overlay_0").getUnclippedBoundsInRoot()
         val controlBounds = composeRule.onNodeWithTag("lens_controls").getUnclippedBoundsInRoot()
         assertTrue("Label $labelBounds overlaps controls $controlBounds", labelBounds.bottom <= controlBounds.top)
+    }
+
+    @Test
+    fun nearbyEnglishLabelsDoNotOverlapEachOther() {
+        val base = sampleState().overlayItems.single()
+        val state = sampleState().copy(
+            selectedMode = OutputMode.ENGLISH,
+            overlayItems = listOf(
+                base.copy(
+                    japanese = "橋",
+                    bounds = NormalizedBounds(0.42f, 0.40f, 0.50f, 0.46f),
+                    english = "Bridge",
+                ),
+                base.copy(
+                    japanese = "花",
+                    bounds = NormalizedBounds(0.48f, 0.42f, 0.56f, 0.48f),
+                    english = "Flower",
+                ),
+                base.copy(
+                    japanese = "月",
+                    bounds = NormalizedBounds(0.52f, 0.44f, 0.60f, 0.50f),
+                    english = "Moon",
+                ),
+            ),
+        )
+        composeRule.setContent {
+            YomiLensTheme {
+                YomiLensScreen(
+                    state = state,
+                    hasCameraPermission = false,
+                    isCameraReady = false,
+                    imageCapture = ImageCapture.Builder().build(),
+                    onRequestCamera = {},
+                    onModeSelected = {},
+                    onScan = {},
+                    onRetryEnglish = {},
+                    onCameraError = {},
+                    onCameraReady = {},
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        val bounds = (0..2).map { index ->
+            composeRule.onNodeWithTag("overlay_$index").getUnclippedBoundsInRoot()
+        }
+        bounds.forEachIndexed { index, label ->
+            bounds.drop(index + 1).forEach { other ->
+                val overlaps = label.left < other.right &&
+                    label.right > other.left &&
+                    label.top < other.bottom &&
+                    label.bottom > other.top
+                assertTrue("Labels overlap: $label and $other", !overlaps)
+            }
+        }
+    }
+
+    @Test
+    fun rtlLayoutKeepsLabelInAbsoluteCameraCoordinates() {
+        val state = sampleState().copy(
+            selectedMode = OutputMode.ENGLISH,
+            overlayItems = sampleState().overlayItems.map { item ->
+                item.copy(bounds = NormalizedBounds(0.05f, 0.4f, 0.2f, 0.46f))
+            },
+        )
+        composeRule.setContent {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                YomiLensTheme {
+                    YomiLensScreen(
+                        state = state,
+                        hasCameraPermission = false,
+                        isCameraReady = false,
+                        imageCapture = ImageCapture.Builder().build(),
+                        onRequestCamera = {},
+                        onModeSelected = {},
+                        onScan = {},
+                        onRetryEnglish = {},
+                        onCameraError = {},
+                        onCameraReady = {},
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        val label = composeRule.onNodeWithTag("overlay_0").getUnclippedBoundsInRoot()
+        val lens = composeRule.onNodeWithTag("translation_overlay_layer").getUnclippedBoundsInRoot()
+        assertTrue("RTL mirrored camera-space label $label in $lens", label.left < lens.right / 2)
     }
 
     private fun sampleState() = YomiLensUiState(
