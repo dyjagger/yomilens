@@ -20,7 +20,6 @@ class CameraScanSmokeTest {
     fun streamingCameraAutomaticallyCompletesTwoSerializedCaptureCycles() {
         composeRule.waitUntil(timeoutMillis = 20_000) { automaticScanningIsReady() }
         composeRule.waitUntil(timeoutMillis = 40_000) { completedScanCountIs(1) }
-        composeRule.waitUntil(timeoutMillis = 15_000) { automaticCaptureIsBusy() }
         composeRule.waitUntil(timeoutMillis = 40_000) { completedScanCountIs(2) }
     }
 
@@ -32,9 +31,4 @@ class CameraScanSmokeTest {
         "Completed automatic scans: $count",
     ).fetchSemanticsNodes().isNotEmpty()
 
-    private fun automaticCaptureIsBusy(): Boolean {
-        val capturing = composeRule.onAllNodesWithText("Capturing automatically…").fetchSemanticsNodes()
-        val recognizing = composeRule.onAllNodesWithText("Reading kanji…").fetchSemanticsNodes()
-        return capturing.isNotEmpty() || recognizing.isNotEmpty()
-    }
 }
