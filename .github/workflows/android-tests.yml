@@ -57,11 +57,11 @@ jobs:
           disable-animations: true
           script: |
             ./gradlew assembleDebug --no-parallel
-            curl --fail --location --silent --show-error https://github.com/dyjagger/yomilens/releases/download/v0.1.1/YomiLens-universal.apk --output /tmp/YomiLens-v0.1.1.apk
             curl --fail --location --silent --show-error https://github.com/dyjagger/yomilens/releases/download/v0.1.3/YomiLens-universal.apk --output /tmp/YomiLens-v0.1.3.apk
-            adb install /tmp/YomiLens-v0.1.1.apk
-            adb install -r /tmp/YomiLens-v0.1.3.apk
-            adb shell dumpsys package app.yomilens | grep -q 'versionCode=4'
+            curl --fail --location --silent --show-error https://github.com/dyjagger/yomilens/releases/download/v0.1.4/YomiLens-universal.apk --output /tmp/YomiLens-v0.1.4.apk
+            adb install /tmp/YomiLens-v0.1.3.apk
+            adb install -r /tmp/YomiLens-v0.1.4.apk
+            adb shell dumpsys package app.yomilens | grep -q 'versionCode=5'
             adb uninstall app.yomilens
             ./gradlew connectedDebugAndroidTest --no-parallel
             grep -R 'YomiLensExternal' app/build/outputs/androidTest-results/connected/debug || true
