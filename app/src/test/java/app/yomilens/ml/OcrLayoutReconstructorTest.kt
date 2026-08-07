@@ -42,6 +42,13 @@ class OcrLayoutReconstructorTest {
         assertEquals("いろ", readings["色"])
     }
 
+    @Test
+    fun exposesTheSameVisualGroupsUsedForLensOverlays() {
+        val groups = OcrLayoutReconstructor.splitVisuallySeparate(chartSegments("橋花月"))
+
+        assertEquals(listOf("橋", "花", "月"), groups.map(OcrLayoutReconstructor::reconstructLine))
+    }
+
     private fun closeSegments(text: String): List<OcrSegment> = text.mapIndexed { index, character ->
         val left = index * 22
         OcrSegment(character.toString(), left = left, right = left + 20)

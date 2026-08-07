@@ -34,7 +34,25 @@ object OcrLayoutReconstructor {
         }
     }
 
-    private fun isVisuallySeparate(previous: OcrSegment, current: OcrSegment): Boolean {
+    /** Splits one OCR line into independently positioned labels or prose runs. */
+    fun splitVisuallySeparate(segments: List<OcrSegment>): List<List<OcrSegment>> {
+        val usableSegments = segments.filter { it.text.isNotBlank() }
+        if (usableSegments.isEmpty()) return emptyList()
+
+        return buildList {
+            var current = mutableListOf(usableSegments.first())
+            usableSegments.drop(1).forEach { segment ->
+                if (isVisuallySeparate(current.last(), segment)) {
+                    add(current)
+                    current = mutableListOf()
+                }
+                current += segment
+            }
+            add(current)
+        }
+    }
+
+    internal fun isVisuallySeparate(previous: OcrSegment, current: OcrSegment): Boolean {
         val previousLeft = previous.left ?: return false
         val previousRight = previous.right ?: return false
         val currentLeft = current.left ?: return false

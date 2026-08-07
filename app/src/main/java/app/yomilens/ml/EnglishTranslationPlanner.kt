@@ -33,7 +33,14 @@ object EnglishTranslationPlanner {
     fun create(japanese: String, readings: List<ReadingLine>): EnglishTranslationPlan {
         if (OCR_WIDE_GAP !in japanese) {
             return EnglishTranslationPlan(
-                rows = listOf(listOf(EnglishTranslationEntry(japanese))),
+                rows = listOf(
+                    listOf(
+                        EnglishTranslationEntry(
+                            japanese = japanese,
+                            fixedEnglish = readingAwareEnglish(japanese, readings),
+                        ),
+                    ),
+                ),
                 preserveLayout = false,
             )
         }
@@ -50,10 +57,7 @@ object EnglishTranslationPlanner {
             )
         }
 
-        val readingBySurface = readings
-            .flatMap { line -> line.tokens }
-            .mapNotNull { token -> token.furigana?.let { token.surface to it } }
-            .toMap()
+        val readingBySurface = readingBySurface(readings)
         return EnglishTranslationPlan(
             rows = chartRows.map { row ->
                 row.map { entry ->
@@ -66,6 +70,14 @@ object EnglishTranslationPlanner {
             preserveLayout = true,
         )
     }
+
+    private fun readingAwareEnglish(japanese: String, readings: List<ReadingLine>): String? =
+        READING_AWARE_LABELS[japanese to readingBySurface(readings)[japanese]]
+
+    private fun readingBySurface(readings: List<ReadingLine>): Map<String, String> = readings
+        .flatMap { line -> line.tokens }
+        .mapNotNull { token -> token.furigana?.let { token.surface to it } }
+        .toMap()
 
     private val READING_AWARE_LABELS = mapOf(
         ("月" to "つき") to "Moon",

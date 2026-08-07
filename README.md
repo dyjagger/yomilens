@@ -16,11 +16,11 @@ Android may ask you to allow installation from your browser or file manager beca
 
 ## Scanning
 
-1. Put one or two horizontal lines of clearly printed Japanese inside the bright camera box.
-2. Tap the text to focus, choose Furigana, Romaji, or English, and tap **Scan Japanese**.
-3. Check **Detected Japanese** above the result. All three output choices are derived from that exact detected text.
+1. Point the full-screen camera at clearly printed Japanese and tap the text to focus.
+2. Choose Furigana, Romaji, or English, then tap **Scan Japanese**.
+3. The captured frame freezes in memory and the selected output appears beside each detected text region. Switch modes without rescanning, or tap **Scan again** to return to the live lens.
 
-Only the bright guide box is scanned. English-only background lines are discarded. Furigana appears as the smaller hiragana text above tokens containing kanji.
+The whole visible lens is scanned. English-only background lines are discarded. The thin outlines show exactly which Japanese regions produced each label.
 
 ## Privacy-first behavior
 
@@ -40,7 +40,7 @@ The project requires Android SDK 36 and Java 17 or newer.
 ./gradlew assembleDebug
 ```
 
-Use `./gradlew connectedDebugAndroidTest --no-parallel` to run the camera, OCR, and Compose tests on a stable emulator or connected phone. The hosted Android 15 emulator suite passes; a physical-device pass is still required for device-specific camera behavior.
+Use `./gradlew connectedDebugAndroidTest --no-parallel` to run the camera, OCR, and Compose tests on a stable emulator or connected phone. The emulator matrix includes the Xperia 1 VI's 1080×2340 display shape; physical-device passes are still required for device-specific camera behavior.
 
 The connected suite also renders all three outputs from one scan and asks the bundled Japanese OCR model to read a high-contrast generated sample. See `docs/USER_TESTS.md` for the acceptance matrix.
 

@@ -4,8 +4,10 @@ import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.graphics.Rect
 import androidx.camera.core.ImageProxy
+import app.yomilens.model.NormalizedBounds
 import com.google.android.gms.tasks.Task
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
@@ -17,36 +19,27 @@ data class CapturedFrame(
     val closeSource: () -> Unit,
 )
 
+data class JapaneseOcrRegion(
+    val text: String,
+    val bounds: NormalizedBounds,
+)
+
+/** The upright captured viewport stays in memory so overlays cannot drift off the source text. */
+data class JapaneseOcrResult(
+    val text: String,
+    val regions: List<JapaneseOcrRegion>,
+    val frozenFrame: Bitmap,
+)
+
 class JapaneseOcrEngine(
     private val recognizer: TextRecognizer = TextRecognition.getClient(
         JapaneseTextRecognizerOptions.Builder().build(),
     ),
-    private val textRecognition: (InputImage) -> Task<String> = { input ->
-        recognizer.process(input).continueWith { task ->
-            val lines = task.result.textBlocks.flatMap { block ->
-                block.lines.map { line ->
-                    line.elements.map { element ->
-                        OcrSegment(
-                            text = element.text,
-                            left = element.boundingBox?.left,
-                            right = element.boundingBox?.right,
-                        )
-                    }.ifEmpty {
-                        listOf(
-                            OcrSegment(
-                                text = line.text,
-                                left = line.boundingBox?.left,
-                                right = line.boundingBox?.right,
-                            ),
-                        )
-                    }
-                }
-            }
-            OcrLayoutReconstructor.reconstruct(lines)
-        }
+    private val textRecognition: (InputImage) -> Task<OcrRecognition> = { input ->
+        recognizer.process(input).continueWith { task -> extractRecognition(task.result) }
     },
 ) : AutoCloseable {
-    fun recognize(imageProxy: ImageProxy): Task<String> {
+    fun recognize(imageProxy: ImageProxy): Task<JapaneseOcrResult> {
         val sourceBitmap = try {
             imageProxy.toBitmap()
         } catch (error: Exception) {
@@ -69,43 +62,66 @@ class JapaneseOcrEngine(
         return recognize(frame)
     }
 
-    fun recognize(frame: CapturedFrame): Task<String> {
-        var workingBitmap = frame.bitmap
+    fun recognize(frame: CapturedFrame): Task<JapaneseOcrResult> {
+        var fullBitmap = frame.bitmap
+        var recognitionBitmap: Bitmap? = null
         var sourceClosed = false
         return try {
-            workingBitmap = workingBitmap.replaceWith(
-                workingBitmap.cropTo(frame.viewportCrop),
-            )
-            workingBitmap = workingBitmap.replaceWith(
-                workingBitmap.rotate(frame.rotationDegrees),
-            )
-            val guideCrop = ScanGuideCrop.regionFor(
-                width = workingBitmap.width,
-                height = workingBitmap.height,
-            )
-            workingBitmap = workingBitmap.replaceWith(
-                Bitmap.createBitmap(
-                    workingBitmap,
-                    guideCrop.left,
-                    guideCrop.top,
-                    guideCrop.width,
-                    guideCrop.height,
-                ),
-            )
+            fullBitmap = fullBitmap.replaceWith(fullBitmap.cropTo(frame.viewportCrop))
+            fullBitmap = fullBitmap.replaceWith(fullBitmap.rotate(frame.rotationDegrees))
+            val guideCrop = ScanGuideCrop.regionFor(fullBitmap.width, fullBitmap.height)
+            recognitionBitmap = fullBitmap.cropCopy(guideCrop)
 
             sourceClosed = true
             frame.closeSource()
-            val inputBitmap = workingBitmap
-            val input = InputImage.fromBitmap(inputBitmap, 0)
-            textRecognition(input)
-                .continueWith { result -> JapaneseTextCleaner.clean(result.result) }
-                .addOnCompleteListener { inputBitmap.recycleSafely() }
+            val inputBitmap = recognitionBitmap
+            val retainedFrame = fullBitmap
+            textRecognition(InputImage.fromBitmap(inputBitmap, 0))
+                .continueWith { task ->
+                    val raw = task.result
+                    val cleanedText = JapaneseTextCleaner.clean(raw.text)
+                    val mappedRegions = raw.regions.mapNotNull { region ->
+                        val cleanedRegion = JapaneseTextCleaner.clean(region.text)
+                        cleanedRegion.takeIf(String::isNotBlank)?.let {
+                            JapaneseOcrRegion(
+                                text = it,
+                                bounds = region.bounds.toNormalizedBounds(
+                                    guideCrop = guideCrop,
+                                    fullWidth = retainedFrame.width,
+                                    fullHeight = retainedFrame.height,
+                                ),
+                            )
+                        }
+                    }.ifEmpty {
+                        cleanedText.takeIf(String::isNotBlank)?.let {
+                            listOf(
+                                JapaneseOcrRegion(
+                                    text = it,
+                                    bounds = guideCrop.toNormalizedBounds(
+                                        retainedFrame.width,
+                                        retainedFrame.height,
+                                    ),
+                                ),
+                            )
+                        }.orEmpty()
+                    }
+                    JapaneseOcrResult(
+                        text = cleanedText,
+                        regions = mappedRegions,
+                        frozenFrame = retainedFrame,
+                    )
+                }
+                .addOnCompleteListener { task ->
+                    inputBitmap.recycleSafely()
+                    if (!task.isSuccessful) retainedFrame.recycleSafely()
+                }
         } catch (error: Exception) {
             if (!sourceClosed) {
                 sourceClosed = true
                 frame.closeSource()
             }
-            workingBitmap.recycleSafely()
+            recognitionBitmap.recycleSafely()
+            fullBitmap.recycleSafely()
             throw error
         }
     }
@@ -115,12 +131,84 @@ class JapaneseOcrEngine(
     }
 }
 
+private fun extractRecognition(text: Text): OcrRecognition {
+    val lines = text.textBlocks.flatMap { block -> block.lines }
+    val reconstructedLines = lines.map { line ->
+        line.elements.map { element ->
+            OcrSegment(
+                text = element.text,
+                left = element.boundingBox?.left,
+                right = element.boundingBox?.right,
+            )
+        }.ifEmpty {
+            listOf(
+                OcrSegment(
+                    text = line.text,
+                    left = line.boundingBox?.left,
+                    right = line.boundingBox?.right,
+                ),
+            )
+        }
+    }
+    val regions = text.textBlocks.flatMap { block ->
+        OcrRegionLayout.regionsForBlock(
+            lines = block.lines.map { line ->
+                OcrPositionedLine(
+                    segments = line.elements.map { element ->
+                        OcrPositionedSegment(element.text, element.boundingBox?.toPixelBounds())
+                    }.ifEmpty {
+                        listOf(OcrPositionedSegment(line.text, line.boundingBox?.toPixelBounds()))
+                    },
+                    bounds = line.boundingBox?.toPixelBounds(),
+                )
+            },
+            blockBounds = block.boundingBox?.toPixelBounds(),
+        )
+    }
+    return OcrRecognition(
+        text = OcrLayoutReconstructor.reconstruct(reconstructedLines),
+        regions = regions,
+    )
+}
+
+private fun Rect.toPixelBounds() = OcrPixelBounds(left, top, right, bottom)
+
+private fun OcrPixelBounds?.toNormalizedBounds(
+    guideCrop: PixelCrop,
+    fullWidth: Int,
+    fullHeight: Int,
+): NormalizedBounds {
+    if (this == null) return guideCrop.toNormalizedBounds(fullWidth, fullHeight)
+    val absoluteLeft = (guideCrop.left + left).coerceIn(0, fullWidth)
+    val absoluteTop = (guideCrop.top + top).coerceIn(0, fullHeight)
+    val absoluteRight = (guideCrop.left + right).coerceIn(absoluteLeft, fullWidth)
+    val absoluteBottom = (guideCrop.top + bottom).coerceIn(absoluteTop, fullHeight)
+    return NormalizedBounds(
+        left = absoluteLeft.toFloat() / fullWidth,
+        top = absoluteTop.toFloat() / fullHeight,
+        right = absoluteRight.toFloat() / fullWidth,
+        bottom = absoluteBottom.toFloat() / fullHeight,
+    )
+}
+
+private fun PixelCrop.toNormalizedBounds(fullWidth: Int, fullHeight: Int) = NormalizedBounds(
+    left = left.toFloat() / fullWidth,
+    top = top.toFloat() / fullHeight,
+    right = right.toFloat() / fullWidth,
+    bottom = bottom.toFloat() / fullHeight,
+)
+
 private fun Bitmap.cropTo(rect: Rect): Bitmap {
     val left = rect.left.coerceIn(0, width - 1)
     val top = rect.top.coerceIn(0, height - 1)
     val right = rect.right.coerceIn(left + 1, width)
     val bottom = rect.bottom.coerceIn(top + 1, height)
     return Bitmap.createBitmap(this, left, top, right - left, bottom - top)
+}
+
+private fun Bitmap.cropCopy(rect: PixelCrop): Bitmap {
+    val cropped = Bitmap.createBitmap(this, rect.left, rect.top, rect.width, rect.height)
+    return if (cropped === this) copy(config ?: Bitmap.Config.ARGB_8888, false) else cropped
 }
 
 private fun Bitmap.rotate(degrees: Int): Bitmap {

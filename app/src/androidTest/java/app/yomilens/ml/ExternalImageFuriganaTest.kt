@@ -24,7 +24,7 @@ class ExternalImageFuriganaTest {
         val ocrEngine = JapaneseOcrEngine()
 
         try {
-            val detected = ocrEngine.recognize(
+            val recognition = ocrEngine.recognize(
                 CapturedFrame(
                     bitmap = bitmap,
                     viewportCrop = Rect(0, 0, bitmap.width, bitmap.height),
@@ -32,6 +32,11 @@ class ExternalImageFuriganaTest {
                     closeSource = {},
                 ),
             ).await()
+            val detected = recognition.text
+            assertEquals(
+                listOf("橋", "花", "月", "友", "目", "色"),
+                recognition.regions.map(JapaneseOcrRegion::text),
+            )
             val annotated = JapaneseReadingEngine().annotate(detected)
             val kanjiTokens = annotated
                 .flatMap { it.tokens }
@@ -43,7 +48,7 @@ class ExternalImageFuriganaTest {
                 kanjiTokens.all { token -> !token.furigana.isNullOrBlank() },
             )
             val detectedReadings = kanjiTokens.associate { token -> token.surface to token.furigana }
-            EXPECTED_CROPPED_READINGS.forEach { (character, reading) ->
+            EXPECTED_READINGS.forEach { (character, reading) ->
                 assertEquals("Wrong furigana for $character in: $detected", reading, detectedReadings[character])
             }
 
@@ -62,13 +67,27 @@ class ExternalImageFuriganaTest {
             try {
                 val english = translationEngine.translate(detected, annotated)
                 assertEquals(
-                    listOf("friend", "moon", "eye", "color"),
+                    listOf("bridge", "flower", "moon", "friend", "eye", "color"),
                     english.split(Regex("\\s+")).map(String::lowercase),
                 )
+                val overlayEnglish = translationEngine.translateUnits(
+                    recognition.regions.map { region ->
+                        JapaneseTranslationUnit(
+                            japanese = region.text,
+                            readings = JapaneseReadingEngine().annotate(region.text),
+                        )
+                    },
+                )
+                assertEquals(
+                    listOf("bridge", "flower", "moon", "friend", "eye", "color"),
+                    overlayEnglish.map(String::lowercase),
+                )
                 Log.i(LOG_TAG, "ENGLISH=${english.replace('\n', '|')}")
+                Log.i(LOG_TAG, "OVERLAY_ENGLISH=${overlayEnglish.joinToString("|")}")
             } finally {
                 translationEngine.close()
             }
+            recognition.frozenFrame.recycle()
         } finally {
             ocrEngine.close()
         }
@@ -82,7 +101,9 @@ class ExternalImageFuriganaTest {
 
         const val TEST_IMAGE = "requested_user_image.jpg"
         const val LOG_TAG = "YomiLensExternal"
-        val EXPECTED_CROPPED_READINGS = mapOf(
+        val EXPECTED_READINGS = mapOf(
+            "橋" to "はし",
+            "花" to "はな",
             "友" to "とも",
             "月" to "つき",
             "目" to "め",

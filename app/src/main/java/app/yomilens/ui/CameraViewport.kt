@@ -10,18 +10,13 @@ import androidx.camera.core.Preview
 import androidx.camera.core.UseCaseGroup
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -30,7 +25,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.doOnLayout
 import androidx.lifecycle.Observer
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import app.yomilens.ml.ScanGuideCrop
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -40,7 +34,7 @@ class CameraScanController internal constructor(
     private val previewView: PreviewView,
     private val mainExecutor: Executor,
 ) {
-    fun focusGuide(onFocused: () -> Unit) {
+    fun focusCenter(onFocused: () -> Unit) {
         val delivered = AtomicBoolean(false)
         val finish = {
             if (delivered.compareAndSet(false, true)) onFocused()
@@ -183,46 +177,12 @@ fun CameraViewport(
 
     Box(
         modifier = modifier.semantics {
-            contentDescription = "Live camera preview. Center Japanese text inside the guide."
+            contentDescription = "Full-screen live camera preview. Point anywhere at Japanese text."
         },
     ) {
         AndroidView(
             factory = { previewView },
             modifier = Modifier.fillMaxSize(),
         )
-        FocusGuide(Modifier.fillMaxSize())
-    }
-}
-
-@Composable
-private fun FocusGuide(modifier: Modifier = Modifier) {
-    val guideColor = MaterialTheme.colorScheme.secondary
-
-    Canvas(modifier) {
-        val left = size.width * ScanGuideCrop.HORIZONTAL_INSET
-        val right = size.width * (1f - ScanGuideCrop.HORIZONTAL_INSET)
-        val top = size.height * ScanGuideCrop.TOP
-        val bottom = size.height * ScanGuideCrop.BOTTOM
-        val lineLength = size.minDimension * 0.10f
-        val strokeWidth = size.minDimension * 0.009f
-        val shade = Color.Black.copy(alpha = 0.28f)
-        drawRect(shade, topLeft = Offset.Zero, size = size.copy(height = top))
-        drawRect(shade, topLeft = Offset(0f, bottom), size = size.copy(height = size.height - bottom))
-        drawRect(shade, topLeft = Offset(0f, top), size = size.copy(width = left, height = bottom - top))
-        drawRect(
-            shade,
-            topLeft = Offset(right, top),
-            size = size.copy(width = size.width - right, height = bottom - top),
-        )
-
-        fun corner(horizontalStart: Offset, horizontalEnd: Offset, verticalEnd: Offset) {
-            drawLine(guideColor, horizontalStart, horizontalEnd, strokeWidth, StrokeCap.Round)
-            drawLine(guideColor, horizontalStart, verticalEnd, strokeWidth, StrokeCap.Round)
-        }
-
-        corner(Offset(left, top), Offset(left + lineLength, top), Offset(left, top + lineLength))
-        corner(Offset(right, top), Offset(right - lineLength, top), Offset(right, top + lineLength))
-        corner(Offset(left, bottom), Offset(left + lineLength, bottom), Offset(left, bottom - lineLength))
-        corner(Offset(right, bottom), Offset(right - lineLength, bottom), Offset(right, bottom - lineLength))
     }
 }

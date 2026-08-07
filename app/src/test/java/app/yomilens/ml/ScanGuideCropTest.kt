@@ -5,9 +5,9 @@ import org.junit.Test
 
 class ScanGuideCropTest {
     @Test
-    fun cropsToTheVisibleCenterGuide() {
+    fun scansTheWholeVisibleLens() {
         assertEquals(
-            PixelCrop(left = 80, top = 480, right = 920, bottom = 1520),
+            PixelCrop(left = 0, top = 0, right = 1_000, bottom = 2_000),
             ScanGuideCrop.regionFor(width = 1_000, height = 2_000),
         )
     }

@@ -24,7 +24,14 @@ class JapaneseOcrEngineFrameTest {
             textRecognition = { input ->
                 inputWidth = input.width
                 inputHeight = input.height
-                Tasks.forResult("SALE\n日本語")
+                Tasks.forResult(
+                    OcrRecognition(
+                        text = "SALE\n日本語",
+                        regions = listOf(
+                            RawOcrRegion("日本語", OcrPixelBounds(20, 15, 120, 55)),
+                        ),
+                    ),
+                )
             },
         )
 
@@ -39,11 +46,19 @@ class JapaneseOcrEngineFrameTest {
             ).await()
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
-            assertEquals("日本語", result)
-            assertEquals(134, inputWidth)
-            assertEquals(42, inputHeight)
+            assertEquals("日本語", result.text)
+            assertEquals(160, inputWidth)
+            assertEquals(80, inputHeight)
+            assertEquals("日本語", result.regions.single().text)
+            assertEquals(0.125f, result.regions.single().bounds.left, 0.0001f)
+            assertEquals(0.1875f, result.regions.single().bounds.top, 0.0001f)
+            assertEquals(0.75f, result.regions.single().bounds.right, 0.0001f)
+            assertEquals(0.6875f, result.regions.single().bounds.bottom, 0.0001f)
+            assertEquals(160, result.frozenFrame.width)
+            assertEquals(80, result.frozenFrame.height)
             assertEquals(1, closeCount)
             assertTrue("The source bitmap should be released", source.isRecycled)
+            result.frozenFrame.recycle()
         } finally {
             engine.close()
         }

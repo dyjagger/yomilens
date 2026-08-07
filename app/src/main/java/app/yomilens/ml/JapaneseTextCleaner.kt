@@ -9,6 +9,8 @@ object JapaneseTextCleaner {
         .joinToString("\n")
         .trim()
 
+    fun containsJapanese(text: String): Boolean = text.any(::isJapaneseCharacter)
+
     private fun normalizeLine(line: String): String {
         val trimmed = line.trim()
         return buildString(trimmed.length) {

@@ -2,13 +2,11 @@ package app.yomilens.ui
 
 import android.Manifest
 import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.rule.GrantPermissionRule
 import app.yomilens.MainActivity
@@ -28,7 +26,6 @@ class CameraScanSmokeTest {
 
         composeRule.onNodeWithTag("scan_button").performClick()
         composeRule.onNodeWithTag("scan_button").assertIsNotEnabled()
-        composeRule.onNodeWithText("Reading Japanese…").assertIsDisplayed()
 
         composeRule.waitUntil(timeoutMillis = 30_000) { captureReachedOcrOutcome() }
         composeRule.waitUntil(timeoutMillis = 5_000) { scanButtonIsEnabled() }
@@ -40,7 +37,7 @@ class CameraScanSmokeTest {
     }
 
     private fun captureReachedOcrOutcome(): Boolean {
-        val detectedText = composeRule.onAllNodesWithTag("detected_text").fetchSemanticsNodes()
+        val detectedText = composeRule.onAllNodesWithTag("translation_overlay_layer").fetchSemanticsNodes()
         val noJapanese = composeRule.onAllNodesWithText(
             "No Japanese text was found. Move closer, hold steady, and try again.",
         ).fetchSemanticsNodes()

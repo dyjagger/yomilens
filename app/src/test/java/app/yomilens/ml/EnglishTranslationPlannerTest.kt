@@ -71,6 +71,16 @@ class EnglishTranslationPlannerTest {
         assertNull(plan.entries.first { it.japanese == "月" }.fixedEnglish)
     }
 
+    @Test
+    fun standaloneMoonOverlayUsesItsFuriganaToResolveMeaning() {
+        val plan = EnglishTranslationPlanner.create(
+            japanese = "月",
+            readings = listOf(reading("月", "つき", "ツキ")),
+        )
+
+        assertEquals("Moon", plan.entries.single().fixedEnglish)
+    }
+
     private fun chartReadings() = listOf(
         reading("友", "とも", "トモ"),
         reading("月", "つき", "ツキ"),

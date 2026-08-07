@@ -1,11 +1,15 @@
 package app.yomilens.ui
 
+import android.graphics.Bitmap
 import androidx.camera.core.ImageProxy
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import app.yomilens.ml.EnglishTranslationEngine
 import app.yomilens.ml.JapaneseOcrEngine
+import app.yomilens.ml.JapaneseOcrResult
+import app.yomilens.ml.JapaneseTranslationUnit
+import app.yomilens.model.LensOverlayItem
 import app.yomilens.model.OutputMode
 import app.yomilens.model.ReadingLine
 import app.yomilens.reading.JapaneseReadingEngine
@@ -15,8 +19,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import com.google.android.gms.tasks.Task
 
 enum class ScanPhase {
     IDLE,
@@ -34,6 +39,8 @@ data class YomiLensUiState(
     val readingLines: List<ReadingLine> = emptyList(),
     val romaji: String = "",
     val english: String? = null,
+    val overlayItems: List<LensOverlayItem> = emptyList(),
+    val frozenFrame: RetainedCameraFrame? = null,
     val errorMessage: String? = null,
 ) {
     val isBusy: Boolean
@@ -77,18 +84,25 @@ class YomiLensViewModel(
         )
 
         if (mode == OutputMode.ENGLISH && current.recognizedJapanese.isNotBlank() && current.english == null) {
-            requestEnglish(scanGeneration, current.recognizedJapanese, current.readingLines)
+            requestEnglish(scanGeneration, current.overlayItems)
         }
     }
 
     fun beginCapture() {
         scanGeneration += 1
         translationJob?.cancel()
+        val previousFrame = mutableState.value.frozenFrame
         mutableState.value = mutableState.value.copy(
             phase = ScanPhase.CAPTURING,
             errorMessage = null,
+            recognizedJapanese = "",
+            readingLines = emptyList(),
+            romaji = "",
             english = null,
+            overlayItems = emptyList(),
+            frozenFrame = null,
         )
+        previousFrame?.release()
     }
 
     fun onImageCaptured(imageProxy: ImageProxy) {
@@ -105,10 +119,19 @@ class YomiLensViewModel(
         }
 
         viewModelScope.launch {
+            var pendingFrame: Bitmap? = null
             try {
-                val japanese = recognitionTask.await()
-                if (generation != scanGeneration) return@launch
+                val recognition = recognitionTask.awaitOwnedResult()
+                pendingFrame = recognition.frozenFrame
+                if (generation != scanGeneration) {
+                    recognition.frozenFrame.recycleSafely()
+                    pendingFrame = null
+                    return@launch
+                }
+                val japanese = recognition.text
                 if (japanese.isBlank()) {
+                    recognition.frozenFrame.recycleSafely()
+                    pendingFrame = null
                     mutableState.value = mutableState.value.copy(
                         phase = ScanPhase.ERROR,
                         errorMessage = "No Japanese text was found. Move closer, hold steady, and try again.",
@@ -122,13 +145,30 @@ class YomiLensViewModel(
                 val romaji = withContext(processingDispatcher) {
                     readingEngine.romanize(lines)
                 }
-                if (generation != scanGeneration) return@launch
+                val overlays = withContext(processingDispatcher) {
+                    recognition.regions.map { region ->
+                        val regionReadings = readingEngine.annotate(region.text)
+                        LensOverlayItem(
+                            japanese = region.text,
+                            bounds = region.bounds,
+                            readingLines = regionReadings,
+                            romaji = readingEngine.romanize(regionReadings),
+                        )
+                    }
+                }
+                if (generation != scanGeneration) {
+                    recognition.frozenFrame.recycleSafely()
+                    pendingFrame = null
+                    return@launch
+                }
 
                 mutableState.value = mutableState.value.copy(
                     recognizedJapanese = japanese,
                     readingLines = lines,
                     romaji = romaji,
                     english = null,
+                    overlayItems = overlays,
+                    frozenFrame = RetainedCameraFrame(recognition.frozenFrame),
                     phase = if (mutableState.value.selectedMode == OutputMode.ENGLISH) {
                         ScanPhase.PREPARING_ENGLISH
                     } else {
@@ -136,13 +176,16 @@ class YomiLensViewModel(
                     },
                     errorMessage = null,
                 )
+                pendingFrame = null
 
                 if (mutableState.value.selectedMode == OutputMode.ENGLISH) {
-                    requestEnglish(generation, japanese, lines)
+                    requestEnglish(generation, overlays)
                 }
             } catch (cancellation: CancellationException) {
+                pendingFrame.recycleSafely()
                 throw cancellation
             } catch (error: Exception) {
+                pendingFrame.recycleSafely()
                 if (generation == scanGeneration) {
                     mutableState.value = mutableState.value.copy(
                         phase = ScanPhase.ERROR,
@@ -163,14 +206,13 @@ class YomiLensViewModel(
     fun retryEnglish() {
         val current = mutableState.value
         if (current.recognizedJapanese.isNotBlank()) {
-            requestEnglish(scanGeneration, current.recognizedJapanese, current.readingLines)
+            requestEnglish(scanGeneration, current.overlayItems)
         }
     }
 
     private fun requestEnglish(
         generation: Int,
-        japanese: String,
-        readings: List<ReadingLine>,
+        overlays: List<LensOverlayItem>,
     ) {
         translationJob?.cancel()
         mutableState.value = mutableState.value.copy(
@@ -179,10 +221,17 @@ class YomiLensViewModel(
         )
         translationJob = viewModelScope.launch {
             try {
-                val english = translator.translate(japanese, readings)
+                val translations = translator.translateUnits(
+                    overlays.map { overlay ->
+                        JapaneseTranslationUnit(overlay.japanese, overlay.readingLines)
+                    },
+                )
                 if (generation != scanGeneration) return@launch
                 mutableState.value = mutableState.value.copy(
-                    english = english,
+                    english = translations.joinToString("\n"),
+                    overlayItems = overlays.zip(translations) { overlay, english ->
+                        overlay.copy(english = english)
+                    },
                     phase = ScanPhase.READY,
                     errorMessage = null,
                 )
@@ -200,6 +249,7 @@ class YomiLensViewModel(
     }
 
     override fun onCleared() {
+        mutableState.value.frozenFrame?.release()
         ocrEngine.close()
         translator.close()
         super.onCleared()
@@ -215,3 +265,23 @@ class YomiLensViewModel(
         }
     }
 }
+
+private fun Bitmap?.recycleSafely() {
+    if (this != null && !isRecycled) recycle()
+}
+
+/** Recycles a successful task result if cancellation happens before the ViewModel can own it. */
+internal suspend fun Task<JapaneseOcrResult>.awaitOwnedResult(): JapaneseOcrResult =
+    suspendCancellableCoroutine { continuation ->
+        addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                val result = task.result
+                continuation.resume(result) { _, cancelledResult, _ ->
+                    cancelledResult.frozenFrame.recycleSafely()
+                }
+            } else {
+                val error = task.exception ?: CancellationException("Japanese OCR was cancelled")
+                continuation.resumeWith(Result.failure(error))
+            }
+        }
+    }

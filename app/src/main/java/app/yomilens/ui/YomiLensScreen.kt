@@ -1,5 +1,3 @@
-@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-
 package app.yomilens.ui
 
 import android.Manifest
@@ -12,56 +10,74 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size as ComposeSize
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.yomilens.model.LensOverlayItem
+import app.yomilens.model.LensOverlayPlacement
 import app.yomilens.model.OutputMode
-import app.yomilens.model.ReadingLine
+import kotlin.math.roundToInt
 
 @Composable
 fun YomiLensRoute(viewModel: YomiLensViewModel) {
@@ -108,7 +124,7 @@ fun YomiLensRoute(viewModel: YomiLensViewModel) {
                 return@YomiLensScreen
             }
             viewModel.beginCapture()
-            controller.focusGuide {
+            controller.focusCenter {
                 try {
                     imageCapture.takePicture(
                         mainExecutor,
@@ -150,171 +166,289 @@ fun YomiLensScreen(
     onCameraError: (String) -> Unit,
     onCameraReady: (CameraScanController?) -> Unit,
 ) {
-    Scaffold { safePadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(safePadding),
-        ) {
-            AppHeader()
+    var topBarHeightPixels by remember { mutableStateOf(0) }
+    var controlsHeightPixels by remember { mutableStateOf(0) }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+    ) {
+        if (hasCameraPermission) {
+            CameraViewport(
+                imageCapture = imageCapture,
+                onCameraError = onCameraError,
+                onCameraReady = onCameraReady,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            CameraPermissionPanel(onRequestCamera)
+        }
 
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(0.43f)
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(24.dp),
-                tonalElevation = 3.dp,
-            ) {
-                if (hasCameraPermission) {
-                    Box {
-                        CameraViewport(
-                            imageCapture = imageCapture,
-                            onCameraError = onCameraError,
-                            onCameraReady = onCameraReady,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        CameraStatusBadge(
-                            phase = state.phase,
-                            isCameraReady = isCameraReady,
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(10.dp),
-                        )
-                    }
-                } else {
-                    CameraPermissionPanel(onRequestCamera)
-                }
+        val retainedFrame = state.frozenFrame
+        DisposableEffect(retainedFrame) {
+            val retainedByComposition = retainedFrame?.retain() == true
+            onDispose {
+                if (retainedByComposition) retainedFrame.release()
+            }
+        }
+        retainedFrame
+            ?.bitmap
+            ?.takeUnless { it.isRecycled }
+            ?.let { bitmap ->
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Scanned camera frame",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("frozen_camera_frame"),
+                    contentScale = ContentScale.FillBounds,
+                )
             }
 
+        if (state.overlayItems.isNotEmpty()) {
+            TranslationOverlayLayer(
+                items = state.overlayItems,
+                mode = state.selectedMode,
+                topReservedPixels = topBarHeightPixels.toFloat(),
+                bottomReservedPixels = controlsHeightPixels.toFloat(),
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        LensTopBar(
+            phase = state.phase,
+            isCameraReady = isCameraReady,
+            itemCount = state.overlayItems.size,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .onSizeChanged { topBarHeightPixels = it.height },
+        )
+
+        LensControls(
+            state = state,
+            hasCameraPermission = hasCameraPermission,
+            isCameraReady = isCameraReady,
+            onModeSelected = onModeSelected,
+            onScan = onScan,
+            onRetryEnglish = onRetryEnglish,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .onSizeChanged { controlsHeightPixels = it.height },
+        )
+    }
+}
+
+@Composable
+private fun TranslationOverlayLayer(
+    items: List<LensOverlayItem>,
+    mode: OutputMode,
+    topReservedPixels: Float,
+    bottomReservedPixels: Float,
+    modifier: Modifier = Modifier,
+) {
+    val outlineColor = MaterialTheme.colorScheme.secondary
+    val density = LocalDensity.current
+    BoxWithConstraints(modifier.testTag("translation_overlay_layer")) {
+        val viewportWidth = constraints.maxWidth.toFloat()
+        val viewportHeight = constraints.maxHeight.toFloat()
+        val edgePadding = with(density) { 8.dp.toPx() }
+        val fallbackLabelWidth = with(density) { 160.dp.toPx() }
+        val fallbackLabelHeight = with(density) { 42.dp.toPx() }
+        val topReserved = topReservedPixels.takeIf { it > 0f }
+            ?: with(density) { 68.dp.toPx() }
+        val bottomReserved = bottomReservedPixels.takeIf { it > 0f }
+            ?: with(density) { 204.dp.toPx() }
+
+        Canvas(Modifier.fillMaxSize()) {
+            items.forEach { item ->
+                val left = item.bounds.left * size.width
+                val top = item.bounds.top * size.height
+                val width = (item.bounds.right - item.bounds.left) * size.width
+                val height = (item.bounds.bottom - item.bounds.top) * size.height
+                drawRoundRect(
+                    color = outlineColor.copy(alpha = 0.9f),
+                    topLeft = Offset(left, top),
+                    size = ComposeSize(width, height),
+                    cornerRadius = CornerRadius(6.dp.toPx()),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()),
+                )
+            }
+        }
+
+        items.forEachIndexed { index, item ->
+            val label = item.labelFor(mode)
+            if (label.isBlank()) return@forEachIndexed
+            var measuredLabelSize by remember(item, mode, label) { mutableStateOf(IntSize.Zero) }
+            val labelWidth = measuredLabelSize.width.takeIf { it > 0 }?.toFloat()
+                ?: fallbackLabelWidth.coerceAtMost(viewportWidth - edgePadding * 2f)
+            val labelHeight = measuredLabelSize.height.takeIf { it > 0 }?.toFloat()
+                ?: fallbackLabelHeight
+            val placement = LensOverlayPlacement.calculate(
+                bounds = item.bounds,
+                viewportWidth = viewportWidth,
+                viewportHeight = viewportHeight,
+                labelWidth = labelWidth,
+                labelHeight = labelHeight,
+                edgePadding = edgePadding,
+                topReserved = topReserved,
+                bottomReserved = bottomReserved,
+            )
+            val maximumWidth = with(density) { placement.maxWidth.toDp() }
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(0.57f)
-                    .padding(top = 12.dp),
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-                tonalElevation = 4.dp,
+                    .offset { IntOffset(placement.x.roundToInt(), placement.y.roundToInt()) }
+                    .widthIn(max = maximumWidth)
+                    .onSizeChanged { measuredLabelSize = it }
+                    .zIndex(2f)
+                    .testTag("overlay_$index")
+                    .semantics {
+                        contentDescription = "${item.japanese}: $label"
+                    },
+                color = Color.Black.copy(alpha = 0.78f),
+                contentColor = Color.White,
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, outlineColor.copy(alpha = 0.9f)),
             ) {
-                Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
-                    Text(
-                        text = "Show me",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutputModeSelector(
-                        selected = state.selectedMode,
-                        enabled = state.phase != ScanPhase.CAPTURING &&
-                            state.phase != ScanPhase.RECOGNIZING,
-                        onSelected = onModeSelected,
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    HorizontalDivider()
-                    ResultPanel(
-                        state = state,
-                        onRetryEnglish = onRetryEnglish,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .padding(vertical = 10.dp),
-                    )
-                    Button(
-                        onClick = onScan,
-                        enabled = hasCameraPermission && isCameraReady && !state.isBusy,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .testTag("scan_button"),
-                        shape = RoundedCornerShape(16.dp),
-                    ) {
-                        Text(
-                            if (state.selectedMode == OutputMode.ENGLISH) {
-                                "Scan & translate with Google"
-                            } else {
-                                "Scan Japanese"
-                            },
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                }
+                Text(
+                    text = label,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                    fontSize = 16.sp,
+                    lineHeight = 19.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
 }
 
+private fun LensOverlayItem.labelFor(mode: OutputMode): String = when (mode) {
+    OutputMode.FURIGANA -> furigana
+    OutputMode.ROMAJI -> romaji
+    OutputMode.ENGLISH -> english.orEmpty()
+}
+
 @Composable
-private fun CameraStatusBadge(
+private fun LensTopBar(
     phase: ScanPhase,
     isCameraReady: Boolean,
+    itemCount: Int,
     modifier: Modifier = Modifier,
 ) {
     val message = when {
         !isCameraReady -> "Starting camera…"
         phase == ScanPhase.CAPTURING -> "Focusing and capturing…"
-        phase == ScanPhase.RECOGNIZING -> "Scanning only the highlighted box…"
-        else -> "Center Japanese in the box • tap to focus"
+        phase == ScanPhase.RECOGNIZING -> "Reading Japanese…"
+        phase == ScanPhase.PREPARING_ENGLISH -> "Preparing English…"
+        phase == ScanPhase.ERROR -> "Check the message below"
+        itemCount > 0 -> "$itemCount text ${if (itemCount == 1) "area" else "areas"} found"
+        else -> "Point at Japanese • tap the image to focus"
     }
-    Surface(
-        modifier = modifier,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Text(
-            text = message,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            style = MaterialTheme.typography.labelSmall,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
-@Composable
-private fun AppHeader() {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(
-            modifier = Modifier.size(42.dp),
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.primaryContainer,
+            color = Color.Black.copy(alpha = 0.72f),
+            contentColor = Color.White,
+            shape = RoundedCornerShape(12.dp),
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text("読", fontSize = 23.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-        Column(Modifier.padding(start = 12.dp)) {
-            Text("YomiLens", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
-                "Point. Scan. Read.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = "読  YomiLens",
+                modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                fontWeight = FontWeight.Bold,
             )
+        }
+        Surface(
+            color = Color.Black.copy(alpha = 0.72f),
+            contentColor = Color.White,
+            shape = RoundedCornerShape(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (phase in setOf(ScanPhase.CAPTURING, ScanPhase.RECOGNIZING, ScanPhase.PREPARING_ENGLISH)) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(15.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
+                    Spacer(Modifier.size(6.dp))
+                }
+                Text(message, style = MaterialTheme.typography.labelSmall)
+            }
         }
     }
 }
 
 @Composable
-private fun CameraPermissionPanel(onRequestCamera: () -> Unit) {
+private fun LensControls(
+    state: YomiLensUiState,
+    hasCameraPermission: Boolean,
+    isCameraReady: Boolean,
+    onModeSelected: (OutputMode) -> Unit,
+    onScan: () -> Unit,
+    onRetryEnglish: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(28.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("lens_controls")
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("Camera access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "YomiLens uses the camera only to read the text you scan. Images are not saved.",
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(18.dp))
-        Button(onClick = onRequestCamera) { Text("Allow camera") }
+        if (state.phase == ScanPhase.ERROR) {
+            LensErrorMessage(
+                message = state.errorMessage.orEmpty(),
+                canRetryEnglish = state.selectedMode == OutputMode.ENGLISH &&
+                    state.recognizedJapanese.isNotBlank(),
+                onRetryEnglish = onRetryEnglish,
+            )
+        }
+        Surface(
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+            shape = RoundedCornerShape(22.dp),
+            tonalElevation = 5.dp,
+        ) {
+            Column(Modifier.padding(10.dp)) {
+                OutputModeSelector(
+                    selected = state.selectedMode,
+                    enabled = state.phase != ScanPhase.CAPTURING && state.phase != ScanPhase.RECOGNIZING,
+                    onSelected = onModeSelected,
+                )
+                if (state.selectedMode == OutputMode.ENGLISH) {
+                    GoogleTranslationLinks()
+                } else {
+                    Spacer(Modifier.height(7.dp))
+                }
+                Button(
+                    onClick = onScan,
+                    enabled = hasCameraPermission && isCameraReady && !state.isBusy,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("scan_button"),
+                    shape = RoundedCornerShape(15.dp),
+                ) {
+                    Text(
+                        when {
+                            state.frozenFrame != null -> "Scan again"
+                            state.selectedMode == OutputMode.ENGLISH -> "Scan & translate with Google"
+                            else -> "Scan Japanese"
+                        },
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -352,196 +486,74 @@ private fun OutputModeSelector(
 }
 
 @Composable
-private fun ResultPanel(
-    state: YomiLensUiState,
-    onRetryEnglish: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(modifier, contentAlignment = Alignment.Center) {
-        when {
-            state.phase == ScanPhase.CAPTURING || state.phase == ScanPhase.RECOGNIZING -> {
-                ProgressMessage("Reading Japanese…")
-            }
-
-            state.phase == ScanPhase.PREPARING_ENGLISH -> {
-                ProgressMessage("Preparing the on-device English model…")
-            }
-
-            state.phase == ScanPhase.ERROR -> {
-                ErrorMessage(
-                    message = state.errorMessage.orEmpty(),
-                    canRetryEnglish = state.selectedMode == OutputMode.ENGLISH &&
-                        state.recognizedJapanese.isNotBlank(),
-                    onRetryEnglish = onRetryEnglish,
-                )
-            }
-
-            state.recognizedJapanese.isBlank() -> {
+private fun CameraPermissionPanel(onRequestCamera: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier = Modifier.padding(28.dp),
+            shape = RoundedCornerShape(24.dp),
+            tonalElevation = 5.dp,
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("Camera access", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
                 Text(
-                    "Center a clear line of Japanese in the guide, choose an output, then scan.",
+                    "YomiLens reads the camera in memory. Images are never saved or uploaded.",
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp),
                 )
-            }
-
-            else -> {
-                ScanResultContent(state)
+                Spacer(Modifier.height(18.dp))
+                Button(onClick = onRequestCamera) { Text("Allow camera") }
             }
         }
     }
 }
 
 @Composable
-private fun ScanResultContent(state: YomiLensUiState) {
-    Column(Modifier.fillMaxSize()) {
-        Text(
-            text = "Detected Japanese",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        SelectionContainer {
-            Text(
-                text = state.recognizedJapanese,
-                modifier = Modifier.testTag("detected_text"),
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = when (state.selectedMode) {
-                OutputMode.FURIGANA -> "Furigana • small reading above kanji"
-                OutputMode.ROMAJI -> "Romaji"
-                OutputMode.ENGLISH -> "English"
-            },
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(5.dp))
-        Box(Modifier.weight(1f)) {
-            when (state.selectedMode) {
-                OutputMode.FURIGANA -> FuriganaOutput(state.readingLines)
-                OutputMode.ROMAJI -> PlainOutput(state.romaji)
-                OutputMode.ENGLISH -> EnglishOutput(state.english.orEmpty())
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProgressMessage(message: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
-        Spacer(Modifier.height(12.dp))
-        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun ErrorMessage(
+private fun LensErrorMessage(
     message: String,
     canRetryEnglish: Boolean,
     onRetryEnglish: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier.padding(horizontal = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.94f),
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        shape = RoundedCornerShape(14.dp),
     ) {
-        Text(
-            text = message,
-            color = MaterialTheme.colorScheme.error,
-            textAlign = TextAlign.Center,
-        )
-        if (canRetryEnglish) {
-            Spacer(Modifier.height(6.dp))
-            TextButton(onClick = onRetryEnglish) { Text("Retry model download") }
-        }
-    }
-}
-
-@Composable
-private fun FuriganaOutput(lines: List<ReadingLine>) {
-    SelectionContainer {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .testTag("output"),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            lines.forEach { line ->
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    line.tokens.forEach { token ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = token.furigana ?: " ",
-                                fontSize = 14.sp,
-                                lineHeight = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            Text(
-                                text = token.surface,
-                                fontSize = 22.sp,
-                                lineHeight = 27.sp,
-                                fontWeight = FontWeight.Medium,
-                            )
-                        }
-                    }
-                }
+            Text(message, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+            if (canRetryEnglish) {
+                TextButton(onClick = onRetryEnglish) { Text("Retry") }
             }
         }
     }
 }
 
 @Composable
-private fun PlainOutput(text: String) {
-    SelectionContainer {
-        Text(
-            text = text,
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .testTag("output"),
-            style = MaterialTheme.typography.headlineSmall,
-            lineHeight = 32.sp,
-        )
-    }
-}
-
-@Composable
-private fun EnglishOutput(text: String) {
+private fun GoogleTranslationLinks() {
     var showDisclaimer by remember { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .testTag("output"),
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        SelectionContainer {
-            Text(text, style = MaterialTheme.typography.headlineSmall, lineHeight = 32.sp)
+        TextButton(onClick = { uriHandler.openUri("https://translate.google.com") }) {
+            Text("Powered by Google Translate", style = MaterialTheme.typography.labelSmall)
         }
-        Spacer(Modifier.height(10.dp))
-        TextButton(
-            onClick = { uriHandler.openUri("https://translate.google.com") },
-            modifier = Modifier.align(Alignment.End),
-        ) {
-            Text("Powered by Google Translate")
-        }
-        TextButton(
-            onClick = { showDisclaimer = true },
-            modifier = Modifier.align(Alignment.End),
-        ) {
-            Text("Automatic translation disclaimer")
+        TextButton(onClick = { showDisclaimer = true }) {
+            Text("Disclaimer", style = MaterialTheme.typography.labelSmall)
         }
     }
 
