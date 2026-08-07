@@ -21,7 +21,7 @@ The app should be tested with horizontal, high-contrast Japanese and with repres
 
 ## Current run
 
-- All 47 JVM regressions pass. They cover vertical column reconstruction, conservative fragment grouping, compact-horizontal negative cases, the `係船柱[けいせんちゅう]` reading, and its “Mooring post” label in addition to the horizontal OCR cases.
+- All 48 JVM regressions pass. They cover vertical column reconstruction, conservative fragment grouping, compact-horizontal and chart-layout negative cases, the `係船柱[けいせんちゅう]` reading, and its “Mooring post” label in addition to the horizontal OCR cases.
 - Android lint passes with no findings.
 - The app and Android test APKs compile.
 - The UI journey tests cover switching among all three outputs from one recognized phrase, frozen-frame disposal, keeping bottom English labels above the measured controls, and preventing nearby measured labels from overlapping.

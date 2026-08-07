@@ -201,6 +201,22 @@ class OcrRegionLayoutTest {
         assertEquals(listOf("右", "中", "左"), regions.map(RawOcrRegion::text))
     }
 
+    @Test
+    fun combinedChartTextRetainsSpatialRowsAndWideColumnGaps() {
+        val text = OcrRegionLayout.textForRegions(
+            listOf(
+                RawOcrRegion("橋", OcrPixelBounds(20, 20, 50, 70)),
+                RawOcrRegion("花", OcrPixelBounds(140, 20, 170, 70)),
+                RawOcrRegion("月", OcrPixelBounds(260, 20, 290, 70)),
+                RawOcrRegion("友", OcrPixelBounds(20, 100, 50, 150)),
+                RawOcrRegion("目", OcrPixelBounds(140, 100, 170, 150)),
+                RawOcrRegion("色", OcrPixelBounds(260, 100, 290, 150)),
+            ),
+        )
+
+        assertEquals("橋　花　月\n友　目　色", text)
+    }
+
     private fun line(text: String, left: Int, top: Int): OcrPositionedLine = OcrPositionedLine(
         segments = listOf(
             OcrPositionedSegment(

@@ -151,7 +151,7 @@ private fun extractRecognition(text: Text): OcrRecognition {
         },
     )
     return OcrRecognition(
-        text = regions.joinToString("\n", transform = RawOcrRegion::text),
+        text = OcrRegionLayout.textForRegions(regions),
         regions = regions,
     )
 }

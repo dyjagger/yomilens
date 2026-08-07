@@ -45,6 +45,27 @@ object OcrRegionLayout {
             )
         }
 
+    fun textForRegions(regions: List<RawOcrRegion>): String {
+        if (regions.isEmpty()) return ""
+        if (regions.any { it.bounds == null }) {
+            return regions.joinToString("\n", transform = RawOcrRegion::text)
+        }
+
+        val rows = mutableListOf<MutableList<RawOcrRegion>>()
+        regions.sortedBy { it.bounds!!.top }.forEach { region ->
+            val row = rows.firstOrNull { candidate ->
+                candidate.any { existing -> existing.sharesTextRowWith(region) }
+            }
+            if (row == null) rows += mutableListOf(region) else row += region
+        }
+
+        return rows.sortedBy { row -> row.minOf { it.bounds!!.top } }
+            .joinToString("\n") { row ->
+                row.sortedBy { it.bounds!!.left }
+                    .joinToString(OCR_WIDE_GAP.toString(), transform = RawOcrRegion::text)
+            }
+    }
+
     fun regionsForBlock(
         lines: List<OcrPositionedLine>,
         blockBounds: OcrPixelBounds?,
@@ -167,6 +188,12 @@ object OcrRegionLayout {
             add(current)
         }
     }
+}
+
+private fun RawOcrRegion.sharesTextRowWith(other: RawOcrRegion): Boolean {
+    val first = bounds ?: return false
+    val second = other.bounds ?: return false
+    return first.overlapHeight(second) >= minOf(first.height, second.height) * TEXT_ROW_OVERLAP_RATIO
 }
 
 private fun OcrPositionedBlock.isRelatedTo(other: OcrPositionedBlock): Boolean {
@@ -367,3 +394,4 @@ private const val COLUMN_ALIGNMENT_TOLERANCE = 0.58f
 private const val MIN_COLUMN_COVERAGE = 0.60f
 private const val MAX_VERTICAL_ROW_GAP = 0.10f
 private const val MIN_DENSE_ROW_COVERAGE = 0.75f
+private const val TEXT_ROW_OVERLAP_RATIO = 0.50f
