@@ -17,7 +17,7 @@ class JapaneseReadingEngine(
                 tokens = if (line.isBlank()) {
                     emptyList()
                 } else {
-                    tokenizer.tokenize(line).map(::toReadingToken)
+                    applyReadingOverrides(tokenizer.tokenize(line).map(::toReadingToken))
                 },
             )
         }
@@ -65,5 +65,47 @@ class JapaneseReadingEngine(
         val currentStartsWithClosing = current.surface.firstOrNull()?.let(closing::contains) ?: false
         val previousEndsWithOpening = previous.surface.lastOrNull()?.let(opening::contains) ?: false
         return !currentStartsWithClosing && !previousEndsWithOpening
+    }
+
+    private fun applyReadingOverrides(tokens: List<ReadingToken>): List<ReadingToken> = buildList {
+        var index = 0
+        while (index < tokens.size) {
+            val override = READING_OVERRIDES.entries.firstOrNull { (surface, _) ->
+                var combined = ""
+                var candidateIndex = index
+                while (candidateIndex < tokens.size && combined.length < surface.length) {
+                    combined += tokens[candidateIndex].surface
+                    candidateIndex += 1
+                }
+                combined == surface
+            }
+            if (override == null) {
+                add(tokens[index])
+                index += 1
+                continue
+            }
+
+            val (surface, hiragana) = override
+            add(
+                ReadingToken(
+                    surface = surface,
+                    furigana = hiragana,
+                    readingKatakana = KanaScripts.hiraganaToKatakana(hiragana),
+                    isParticle = false,
+                ),
+            )
+            var consumedSurface = ""
+            while (index < tokens.size && consumedSurface.length < surface.length) {
+                consumedSurface += tokens[index].surface
+                index += 1
+            }
+        }
+    }
+
+    private companion object {
+        /** Kuromoji splits this established harbor term and loses its compound reading. */
+        val READING_OVERRIDES = linkedMapOf(
+            "係船柱" to "けいせんちゅう",
+        )
     }
 }

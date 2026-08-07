@@ -132,41 +132,26 @@ class JapaneseOcrEngine(
 }
 
 private fun extractRecognition(text: Text): OcrRecognition {
-    val lines = text.textBlocks.flatMap { block -> block.lines }
-    val reconstructedLines = lines.map { line ->
-        line.elements.map { element ->
-            OcrSegment(
-                text = element.text,
-                left = element.boundingBox?.left,
-                right = element.boundingBox?.right,
+    val regions = OcrRegionLayout.regionsForDocument(
+        text.textBlocks.map { block ->
+            OcrPositionedBlock(
+                lines = block.lines.map { line ->
+                    OcrPositionedLine(
+                        segments = line.elements.map { element ->
+                            OcrPositionedSegment(element.text, element.boundingBox?.toPixelBounds())
+                        }.ifEmpty {
+                            listOf(OcrPositionedSegment(line.text, line.boundingBox?.toPixelBounds()))
+                        },
+                        bounds = line.boundingBox?.toPixelBounds(),
+                        angleDegrees = line.angle,
+                    )
+                },
+                bounds = block.boundingBox?.toPixelBounds(),
             )
-        }.ifEmpty {
-            listOf(
-                OcrSegment(
-                    text = line.text,
-                    left = line.boundingBox?.left,
-                    right = line.boundingBox?.right,
-                ),
-            )
-        }
-    }
-    val regions = text.textBlocks.flatMap { block ->
-        OcrRegionLayout.regionsForBlock(
-            lines = block.lines.map { line ->
-                OcrPositionedLine(
-                    segments = line.elements.map { element ->
-                        OcrPositionedSegment(element.text, element.boundingBox?.toPixelBounds())
-                    }.ifEmpty {
-                        listOf(OcrPositionedSegment(line.text, line.boundingBox?.toPixelBounds()))
-                    },
-                    bounds = line.boundingBox?.toPixelBounds(),
-                )
-            },
-            blockBounds = block.boundingBox?.toPixelBounds(),
-        )
-    }
+        },
+    )
     return OcrRecognition(
-        text = OcrLayoutReconstructor.reconstruct(reconstructedLines),
+        text = regions.joinToString("\n", transform = RawOcrRegion::text),
         regions = regions,
     )
 }

@@ -81,6 +81,23 @@ class EnglishTranslationPlannerTest {
         assertEquals("Moon", plan.entries.single().fixedEnglish)
     }
 
+    @Test
+    fun establishedMooringPostReadingGetsTheCorrectEnglishLabel() {
+        val plan = EnglishTranslationPlanner.create(
+            japanese = "係船柱",
+            readings = listOf(reading("係船柱", "けいせんちゅう", "ケイセンチュウ")),
+        )
+
+        assertEquals("Mooring post", plan.entries.single().fixedEnglish)
+    }
+
+    @Test
+    fun removesLeadingMangaElongationMarkBeforeTranslation() {
+        val plan = EnglishTranslationPlanner.create("ーあれ", readings = emptyList())
+
+        assertEquals("あれ", plan.entries.single().japanese)
+    }
+
     private fun chartReadings() = listOf(
         reading("友", "とも", "トモ"),
         reading("月", "つき", "ツキ"),

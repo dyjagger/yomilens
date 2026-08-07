@@ -20,7 +20,7 @@ Android may ask you to allow installation from your browser or file manager beca
 2. Choose Furigana, Romaji, or English, then tap **Scan Japanese**.
 3. The captured frame freezes in memory and the selected output appears beside each detected text region. Switch modes without rescanning, or tap **Scan again** to return to the live lens.
 
-The whole visible lens is scanned. English-only text and stray non-Japanese punctuation such as `!` and `?` are discarded before readings or translation. The thin outlines show exactly which Japanese regions produced each label, and measured labels move to open screen space so they do not cover one another.
+The whole visible lens is scanned. Horizontal prose and compact vertical manga columns are ordered before readings or translation; adjacent OCR fragments from one speech region are rejoined. English-only text and stray non-Japanese punctuation such as `!` and `?` are discarded. The thin outlines show exactly which Japanese regions produced each label, and measured labels move to open screen space so they do not cover one another.
 
 ## Privacy-first behavior
 
@@ -48,6 +48,6 @@ Install `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk` on an ARM64 phone,
 
 ## Accuracy limits
 
-Camera focus, stylized fonts, vertical text, low contrast, uncommon names, and tokenizer ambiguity can all reduce accuracy. Furigana is a dictionary-based reading aid, and English is an automatic translation; neither should be treated as authoritative.
+Camera focus, stylized or unusually arranged manga text, low contrast, uncommon names, and tokenizer ambiguity can all reduce accuracy. YomiLens reconstructs standard right-to-left vertical columns, but characters that OCR never detects cannot always be recovered. Furigana is a dictionary-based reading aid, and English is an automatic translation; neither should be treated as authoritative.
 
 Google Translate attribution and the in-app automatic-translation disclaimer must remain visible in any distributed build. Release branding, signing, store copy, and a real-device acceptance matrix are intentionally deferred.

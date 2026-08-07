@@ -6,7 +6,7 @@ CameraX binds one full-screen preview and one in-memory `ImageCapture` use case 
 
 `JapaneseOcrEngine` converts the captured frame in memory, applies its CameraX viewport crop, rotates it upright, and gives the full visible lens to ML Kit. The OCR result includes normalized bounds for each prose run or spatially separated label. One upright frame is retained only in memory while the result is visible so the overlays cannot drift; temporary bitmaps are recycled, and no image is written to storage.
 
-ML Kit Text Recognition v2 uses its bundled Japanese script model so OCR is ready without a model download. The OCR layer uses element bounds to join close-set Japanese text while keeping widely separated chart entries apart. Cleanup then discards non-Japanese OCR elements and strips Latin text, `!`, `?`, and other unrelated punctuation from mixed elements before any reading or translation work, while preserving allow-listed Japanese sentence punctuation and useful line boundaries.
+ML Kit Text Recognition v2 uses its bundled Japanese script model so OCR is ready without a model download. For compact vertical manga, ML Kit can report horizontal rows crossing several columns. The layout layer expands those rows into positioned glyphs, clusters aligned glyphs into columns, reads columns top-to-bottom and right-to-left, and rejoins nearby fragments from the same speech region. Conservative aspect, row-count, alignment, and coverage gates keep ordinary horizontal prose on its existing path. The same OCR layer joins close-set horizontal Japanese while keeping widely separated chart entries apart. Cleanup then discards non-Japanese OCR elements and strips Latin text, `!`, `?`, and other unrelated punctuation from mixed elements before any reading or translation work, while preserving allow-listed Japanese sentence punctuation and useful line boundaries.
 
 ## Readings
 
@@ -25,7 +25,7 @@ One ViewModel owns immutable UI state. The camera composable owns CameraX bindin
 ## Deferred
 
 - Real-device OCR performance and camera compatibility matrix
-- Vertical Japanese and crop/rotation controls
+- Manual text-direction and crop/rotation controls
 - Gallery import and history
 - Release signing, store assets, and production privacy/legal review
 

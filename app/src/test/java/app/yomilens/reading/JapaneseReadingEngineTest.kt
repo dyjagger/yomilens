@@ -69,4 +69,20 @@ class JapaneseReadingEngineTest {
         assertEquals("め", readings["目"])
         assertEquals("いろ", readings["色"])
     }
+
+    @Test
+    fun keepsTheEstablishedReadingOfMooringPostTogether() {
+        val token = engine.annotate("係船柱").single().tokens.single()
+
+        assertEquals("係船柱", token.surface)
+        assertEquals("けいせんちゅう", token.furigana)
+        assertEquals("keisenchuu", engine.romanize(engine.annotate("係船柱")))
+    }
+
+    @Test
+    fun keepsTheMooringPostReadingInsideASentence() {
+        val tokens = engine.annotate("だから係船柱です").single().tokens
+
+        assertEquals("けいせんちゅう", tokens.single { it.surface == "係船柱" }.furigana)
+    }
 }

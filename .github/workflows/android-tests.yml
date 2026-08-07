@@ -48,7 +48,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Prepare requested user-test image
+      - name: Prepare requested user-test images
         run: |
           mkdir -p app/src/androidTest/assets
           if curl --fail --location --silent --show-error https://cdn.britannica.com/46/63146-050-D6F89DED/Kanji-characters.jpg --output /tmp/requested_user_image.jpg; then
@@ -56,6 +56,9 @@ jobs:
           else
             echo "Requested external image unavailable; its optional device test will be skipped."
           fi
+          curl --fail --location --silent --show-error 'https://commons.wikimedia.org/wiki/Special:Redirect/file/Wikipe-tan_manga_page1.jpg' --output /tmp/open_licensed_manga_page.jpg
+          echo 'a2858a02ceabf0ca2fa2255c772e31af7e5d1f93b28a9acc0cb31cb169fbbf2c  /tmp/open_licensed_manga_page.jpg' | sha256sum --check
+          mv /tmp/open_licensed_manga_page.jpg app/src/androidTest/assets/open_licensed_manga_page.jpg
 
       - name: Run UI and Japanese OCR tests
         uses: reactivecircus/android-emulator-runner@v2
@@ -68,10 +71,10 @@ jobs:
           disable-animations: true
           script: |
             ./gradlew assembleDebug --no-parallel
-            curl --fail --location --silent --show-error https://github.com/dyjagger/yomilens/releases/download/v0.1.4/YomiLens-universal.apk --output /tmp/YomiLens-v0.1.4.apk
-            adb install /tmp/YomiLens-v0.1.4.apk
+            curl --fail --location --silent --show-error https://github.com/dyjagger/yomilens/releases/download/v0.1.5/YomiLens-universal.apk --output /tmp/YomiLens-v0.1.5.apk
+            adb install /tmp/YomiLens-v0.1.5.apk
             adb install -r app/build/outputs/apk/debug/app-universal-debug.apk
-            adb shell dumpsys package app.yomilens | grep -q 'versionCode=6'
+            adb shell dumpsys package app.yomilens | grep -q 'versionCode=7'
             adb uninstall app.yomilens
             ./gradlew connectedDebugAndroidTest --no-parallel
             grep -R 'YomiLensExternal' app/build/outputs/androidTest-results/connected/debug || true

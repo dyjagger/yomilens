@@ -36,7 +36,7 @@ object EnglishTranslationPlanner {
                 rows = listOf(
                     listOf(
                         EnglishTranslationEntry(
-                            japanese = japanese,
+                            japanese = japanese.translationSource(),
                             fixedEnglish = readingAwareEnglish(japanese, readings),
                         ),
                     ),
@@ -74,6 +74,9 @@ object EnglishTranslationPlanner {
     private fun readingAwareEnglish(japanese: String, readings: List<ReadingLine>): String? =
         READING_AWARE_LABELS[japanese to readingBySurface(readings)[japanese]]
 
+    /** A leading manga elongation mark is layout punctuation, not part of the word. */
+    private fun String.translationSource(): String = trimStart('ー').ifBlank { this }
+
     private fun readingBySurface(readings: List<ReadingLine>): Map<String, String> = readings
         .flatMap { line -> line.tokens }
         .mapNotNull { token -> token.furigana?.let { token.surface to it } }
@@ -81,5 +84,6 @@ object EnglishTranslationPlanner {
 
     private val READING_AWARE_LABELS = mapOf(
         ("月" to "つき") to "Moon",
+        ("係船柱" to "けいせんちゅう") to "Mooring post",
     )
 }
